@@ -13,7 +13,7 @@ target_sources(Jiarui_MPM
 		"src/main.cpp"
 )
 
-find_package(glfw3 CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
+# find_package(glfw3 CONFIG REQUIRED)
+# find_package(imgui CONFIG REQUIRED)
 
-target_link_libraries(Jiarui_MPM glfw imgui::imgui)
+# target_link_libraries(Jiarui_MPM glfw imgui::imgui)
