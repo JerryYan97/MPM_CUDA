@@ -4,16 +4,15 @@ cmake_policy(SET CMP0092 NEW) # don't add /W3 for MSVC
 
 project(Jiarui_MPM LANGUAGES CXX CUDA)
 
-add_executable(Jiarui_MPM)
+add_executable(Jiarui_MPM
+		thirdparties/glad/src/glad.c
+		src/main.cpp)
 
-target_compile_features(Jiarui_MPM PUBLIC cxx_std_20)
+target_include_directories(Jiarui_MPM
+		PUBLIC thirdparties/glfw/include
+		PUBLIC thirdparties/glad/include)
 
-target_sources(Jiarui_MPM
-	PRIVATE
-		"src/main.cpp"
-)
-
-# find_package(glfw3 CONFIG REQUIRED)
-# find_package(imgui CONFIG REQUIRED)
-
-# target_link_libraries(Jiarui_MPM glfw imgui::imgui)
+target_link_libraries(Jiarui_MPM
+		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/glfw/build/src/libglfw3.a
+		${CMAKE_DL_LIBS}
+		pthread)
