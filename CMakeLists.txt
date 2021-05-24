@@ -4,6 +4,8 @@ cmake_policy(SET CMP0092 NEW) # don't add /W3 for MSVC
 
 project(Jiarui_MPM LANGUAGES CXX CUDA C)
 
+add_definitions( -DPROJ_PATH=\"${CMAKE_CURRENT_LIST_DIR}\")
+
 add_executable(Jiarui_MPM
 		thirdparties/glad/src/glad.c
 		thirdparties/imgui/imgui.cpp
