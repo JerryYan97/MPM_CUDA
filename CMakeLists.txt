@@ -17,11 +17,12 @@ add_executable(Jiarui_MPM
 		thirdparties/imgui/backends/imgui_impl_glfw.h
 		thirdparties/imgui/backends/imgui_impl_opengl3.h
 		thirdparties/imgui/backends/imgui_impl_opengl3.cpp
-		src/main.cpp)
+		src/main.cpp src/shaderProgram/graphicsPipeline.cpp src/shaderProgram/graphicsPipeline.h src/camera/Camera.cpp src/camera/Camera.h)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
 		PUBLIC thirdparties/glad/include
+		PUBLIC thirdparties/glm
 		PUBLIC thirdparties/imgui
 		PUBLIC thirdparties/imgui/backends)
 
