@@ -9,9 +9,63 @@
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
 #include "shaderProgram/graphicsPipeline.h"
+#include "camera/Camera.h"
+
+
+float deltaTime = 0.f;
+float lastFrame = 0.f;
+int width = 640;
+int height = 480;
+float lastX = width / 2.0f;
+float lastY = height / 2.0f;
+bool firstMouse = true;
+
+Camera mCam;
 
 void error_callback(int error, const char* desc){
     fprintf(stderr, "Error: %s\n", desc);
+}
+
+void processMovementInput(GLFWwindow *window)
+{
+    float camSpeed = 2.5f * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+        mCam.mLookAt += camSpeed * mCam.mViewDir;
+        mCam.updateMat();
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+        mCam.mLookAt -= camSpeed * mCam.mViewDir;
+        mCam.updateMat();
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+        mCam.mLookAt -= camSpeed * mCam.mRight;
+        mCam.updateMat();
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+        mCam.mLookAt += camSpeed * mCam.mRight;
+        mCam.updateMat();
+    }
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
+    lastX = xpos;
+    lastY = ypos;
+
+    if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS){
+        mCam.processMouseMovement(xoffset, yoffset);
+    }
+
 }
 
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
@@ -27,10 +81,14 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    std::cout << "yoffset:" << yoffset << std::endl;
+    mCam.processMouseScroll((float)yoffset);
+}
+
 int main() {
     GLFWwindow* window;
-    int width = 640;
-    int height = 480;
     glfwSetErrorCallback(error_callback);
     if(!glfwInit()){
         return -1;
@@ -47,7 +105,9 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    // glfwSwapInterval(1);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
         std::cout << "Failed to initialize GLAD." << std::endl;
@@ -85,10 +145,8 @@ int main() {
             6, 1, 2
     };
     glm::mat4 model = glm::rotate(glm::mat4(1.f), glm::radians(-55.f), glm::vec3(1.f, 0.f, 0.f));
-    glm::mat4 view = glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -3.f));
     glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
     mPipline.setMat4("model", model);
-    mPipline.setMat4("view", view);
     mPipline.setMat4("proj", proj);
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -124,6 +182,12 @@ int main() {
     float counter = 0.0;
     while (!glfwWindowShouldClose(window)){
         glfwPollEvents();
+        processMovementInput(window);
+
+        float curFrame = glfwGetTime();
+        deltaTime = curFrame - lastFrame;
+        lastFrame = curFrame;
+
         // Start the Dear ImGui frame
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -155,12 +219,13 @@ int main() {
             ImGui::End();
         }
 
-        counter = counter + 0.1;
+        counter = counter + 0.01;
         if (counter > 1){
             counter--;
         }
         std::array<float, 4> tmp{counter, 0.0, 0.0, 0.0};
         mPipline.setVec4("outColor", tmp);
+        mPipline.setMat4("view", mCam.mViewMat);
 
         // Render
         ImGui::Render();
@@ -170,6 +235,7 @@ int main() {
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, sizeof(indices), GL_UNSIGNED_INT, 0);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 
         // Swap buffers
         glfwSwapBuffers(window);
