@@ -84,3 +84,15 @@ void graphicsPipeline::setMat4(const std::string &name, glm::mat4 &val) {
     this->use();
     glUniformMatrix4fv(location, 1, GL_FALSE, &val[0][0]);
 }
+
+void graphicsPipeline::setVec3(const std::string &name, std::array<float, 3> &val) {
+    int location = glGetUniformLocation(ID, name.c_str());
+    this->use();
+    glUniform3f(location, val[0], val[1], val[2]);
+}
+
+void graphicsPipeline::setMat3(const std::string &name, glm::mat3 &val) {
+    int location = glGetUniformLocation(ID, name.c_str());
+    this->use();
+    glUniformMatrix3fv(location, 1, GL_FALSE, &val[0][0]);
+}

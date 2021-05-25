@@ -24,7 +24,8 @@ target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glad/include
 		PUBLIC thirdparties/glm
 		PUBLIC thirdparties/imgui
-		PUBLIC thirdparties/imgui/backends)
+		PUBLIC thirdparties/imgui/backends
+		PUBLIC thirdparties/tinyobj)
 
 target_link_libraries(Jiarui_MPM
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/glfw/build/src/libglfw3.a

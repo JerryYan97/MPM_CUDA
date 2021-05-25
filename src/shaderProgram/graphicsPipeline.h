@@ -16,7 +16,11 @@ public:
     graphicsPipeline(std::string& vPath, std::string& fPath);
     void use();
     void destroy();
+
+    void setVec3(const std::string& name, std::array<float, 3>& val);
     void setVec4(const std::string& name, std::array<float, 4>& val);
+
+    void setMat3(const std::string& name, glm::mat3& val);
     void setMat4(const std::string& name, glm::mat4& val);
 };
 
