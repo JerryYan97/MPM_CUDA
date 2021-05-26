@@ -63,7 +63,11 @@ model::model(std::string &path) {
     }
 
     // Init matrix.
-    mModelMat = glm::rotate(glm::mat4(1.f), glm::radians(0.f), glm::vec3(1.f, 0.f, 0.f));
+    mModelMat = glm::mat4(1.f);
+    mModelMat = glm::translate(mModelMat, glm::vec3(0.f, 0.f, 0.f));
+    mModelMat = glm::scale(mModelMat, glm::vec3(0.05f));
+    mModelMat = glm::rotate(mModelMat, glm::radians(0.f), glm::vec3(1.f, 0.f, 0.f));
+
     mNormalMat = glm::mat3(1.0f);
     mNormalMat[0, 0] = mModelMat[0, 0];
     mNormalMat[0, 1] = mModelMat[0, 1];

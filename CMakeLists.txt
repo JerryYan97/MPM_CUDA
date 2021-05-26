@@ -24,8 +24,7 @@ add_executable(Jiarui_MPM
 		src/camera/Camera.h
 		src/model/model.cpp
 		src/model/model.h
-		src/model/mesh.cpp
-		src/model/mesh.h)
+		src/model/InstanceModel.cpp src/model/InstanceModel.h src/simulator/MPMSimulator.cpp src/simulator/MPMSimulator.h)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include

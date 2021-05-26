@@ -8,7 +8,7 @@
 #include <iostream>
 #include <array>
 #include <glm.hpp>
-#include "../model/model.h"
+#include "../model/InstanceModel.h"
 
 class graphicsPipeline {
 private:
@@ -25,7 +25,7 @@ public:
     void setMat4(const std::string& name, glm::mat4& val);
 
     void render(model& renderedModel);
-    void renderInstance(model& renderedModel);
+    void renderInstance(InstanceModel& renderedModel);
 };
 
 

@@ -13,7 +13,7 @@ uniform mat3 normalMat;
 
 void main()
 {
-    gl_Position = proj * view * model * vec4(aPos, 1.0) + vec4(instancePos, 0.0);
-    Normal = normalMat * aNormal;
+    gl_Position = proj * view * (model * vec4(aPos, 1.0) + vec4(instancePos, 0.0));
+    Normal = normalize(normalMat * aNormal);
     FragPos =vec3(model * vec4(aPos, 1.0));
 }

@@ -104,6 +104,8 @@ int main() {
         return -1;
     }
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -114,22 +116,30 @@ int main() {
         return -1;
     }
 
-    std::string vPath = std::string(PROJ_PATH) + "/src/shaders/myShader.vert";
-    std::string fPath = std::string(PROJ_PATH) + "/src/shaders/myShader.frag";
+    // std::string vPath = std::string(PROJ_PATH) + "/src/shaders/myShader.vert";
+    // std::string fPath = std::string(PROJ_PATH) + "/src/shaders/myShader.frag";
+    std::string vPath = std::string(PROJ_PATH) + "/src/shaders/sphereInstance.vert";
+    std::string fPath = std::string(PROJ_PATH) + "/src/shaders/sphereInstance.frag";
     glEnable(GL_DEPTH_TEST);
     graphicsPipeline mPipline(vPath,fPath);
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
-    model mModel(obj_path);
+    std::string obj_path = std::string(PROJ_PATH) + "/models/sphere.obj";
+    // model mModel(obj_path);
+    std::vector<float> insPos{
+        5.f, 0.f, 0.f,
+        0.f, 0.f, 0.f,
+        -5.f, 0.f, 0.f
+    };
+    InstanceModel mModel(obj_path, insPos);
 
     mPipline.setMat3("normalMat", mModel.mNormalMat);
     mPipline.setMat4("model", mModel.mModelMat);
     mPipline.setMat4("proj", mCam.mProjMat);
     std::array<float, 3> lightColor{1.0, 1.0, 1.0};
     mPipline.setVec3("lightColor", lightColor);
-    std::array<float, 3> objColor{1.0f, 0.5f, 0.31f};
+    std::array<float, 3> objColor{0.1f, 0.1f, 0.9f};
     mPipline.setVec3("objColor", objColor);
 
     // Setup Dear ImGui context
@@ -195,14 +205,18 @@ int main() {
         std::array<float, 3> camPos{mCam.mPos[0], mCam.mPos[1], mCam.mPos[2]};
         mPipline.setVec3("camPos", camPos);
 
+        insPos[0] += 0.01;
+        insPos[3] += 0.01;
+        insPos[6] += 0.01;
+
+        mModel.updateInstanceModel(insPos);
         // Render
         ImGui::Render();
+        mPipline.renderInstance(mModel);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        mPipline.render(mModel);
         // Swap buffers
         glfwSwapBuffers(window);
     }
-
     mPipline.destroy();
 
     glfwDestroyWindow(window);

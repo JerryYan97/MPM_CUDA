@@ -105,6 +105,10 @@ void graphicsPipeline::render(model &renderedModel) {
     glDrawElements(GL_TRIANGLES, renderedModel.mVertNum, GL_UNSIGNED_INT, 0);
 }
 
-void graphicsPipeline::renderInstance(model &renderedModel) {
-
+void graphicsPipeline::renderInstance(InstanceModel& renderedModel) {
+    glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    this->use();
+    glBindVertexArray(renderedModel.VAO);
+    glDrawElementsInstanced(GL_TRIANGLES, renderedModel.mVertNum, GL_UNSIGNED_INT, 0, renderedModel.mInstanceNum);
 }
