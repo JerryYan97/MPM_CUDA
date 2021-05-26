@@ -12,16 +12,18 @@ private:
     float mMouseSensitivity;
 
 public:
-    glm::vec3 mPos;
-    glm::vec3 mLookAt;
-    glm::vec3 mRight;
-    glm::vec3 mUp;
-    glm::vec3 mViewDir;
-    glm::mat4 mViewMat;
+    glm::vec3 mPos{};
+    glm::vec3 mLookAt{};
+    glm::vec3 mRight{};
+    glm::vec3 mUp{};
+    glm::vec3 mViewDir{};
+    glm::mat4 mViewMat{};
+    glm::mat4 mProjMat{};
+
     float mPitch;
     float mYaw;
     float mDistant;
-    Camera();
+    Camera(int width, int height);
     void updateMat();
     void processMouseMovement(float xoffset, float yoffset);
     void processMouseScroll(float yoffset);

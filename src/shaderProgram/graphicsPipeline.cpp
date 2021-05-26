@@ -96,3 +96,15 @@ void graphicsPipeline::setMat3(const std::string &name, glm::mat3 &val) {
     this->use();
     glUniformMatrix3fv(location, 1, GL_FALSE, &val[0][0]);
 }
+
+void graphicsPipeline::render(model &renderedModel) {
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    this->use();
+    glBindVertexArray(renderedModel.VAO);
+    glDrawElements(GL_TRIANGLES, renderedModel.mVertNum, GL_UNSIGNED_INT, 0);
+}
+
+void graphicsPipeline::renderInstance(model &renderedModel) {
+
+}

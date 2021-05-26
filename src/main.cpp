@@ -10,8 +10,8 @@
 #include <gtc/matrix_transform.hpp>
 #include "shaderProgram/graphicsPipeline.h"
 #include "camera/Camera.h"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+#include "model/model.h"
+
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
@@ -21,7 +21,7 @@ float lastX = width / 2.0f;
 float lastY = height / 2.0f;
 bool firstMouse = true;
 
-Camera mCam;
+Camera mCam(width, height);
 
 void error_callback(int error, const char* desc){
     fprintf(stderr, "Error: %s\n", desc);
@@ -121,75 +121,12 @@ int main() {
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    tinyobj::ObjReader reader;
-    tinyobj::ObjReaderConfig reader_config;
     std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
-    if (!reader.ParseFromFile(obj_path)) {
-        if (!reader.Error().empty()) {
-            std::cerr << "TinyObjReader: " << reader.Error();
-        }
-        exit(1);
-    }
+    model mModel(obj_path);
 
-    if (!reader.Warning().empty()) {
-        std::cout << "TinyObjReader: " << reader.Warning();
-    }
-
-    auto& shapes = reader.GetShapes();
-    auto& attrib = reader.GetAttrib();
-    std::vector<float> vert_vec;
-    std::vector<unsigned int> ind_vec;
-    int vert_num = shapes[0].mesh.num_face_vertices.size() * 3;
-    vert_vec.resize(vert_num * 6);
-    ind_vec.resize(vert_num);
-    for (size_t s = 0; s < shapes.size(); s++) {
-        int vert_idx = 0;
-        // Loop over faces(polygon)
-        size_t index_offset = 0;
-        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-            size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
-
-            // Loop over vertices in the face.
-            for (size_t v = 0; v < fv; v++) {
-                // access to vertex
-                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
-                tinyobj::real_t vx = attrib.vertices[3*size_t(idx.vertex_index)+0];
-                tinyobj::real_t vy = attrib.vertices[3*size_t(idx.vertex_index)+1];
-                tinyobj::real_t vz = attrib.vertices[3*size_t(idx.vertex_index)+2];
-
-                tinyobj::real_t nx = attrib.normals[3*size_t(idx.normal_index)+0];
-                tinyobj::real_t ny = attrib.normals[3*size_t(idx.normal_index)+1];
-                tinyobj::real_t nz = attrib.normals[3*size_t(idx.normal_index)+2];
-                vert_vec[vert_idx * 6] = vx;
-                vert_vec[vert_idx * 6 + 1] = vy;
-                vert_vec[vert_idx * 6 + 2] = vz;
-                vert_vec[vert_idx * 6 + 3] = nx;
-                vert_vec[vert_idx * 6 + 4] = ny;
-                vert_vec[vert_idx * 6 + 5] = nz;
-                ind_vec[vert_idx] = vert_idx;
-                vert_idx++;
-            }
-            index_offset += fv;
-        }
-    }
-
-    glm::mat4 model = glm::rotate(glm::mat4(1.f), glm::radians(0.f), glm::vec3(1.f, 0.f, 0.f));
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
-    glm::mat3 normalMat(1.0f);
-    normalMat[0, 0] = model[0, 0];
-    normalMat[0, 1] = model[0, 1];
-    normalMat[0, 2] = model[0, 2];
-    normalMat[1, 0] = model[1, 0];
-    normalMat[1, 1] = model[1, 1];
-    normalMat[1, 2] = model[1, 2];
-    normalMat[2, 0] = model[2, 0];
-    normalMat[2, 1] = model[2, 1];
-    normalMat[2, 2] = model[2, 2];
-    normalMat = glm::transpose(glm::inverse(normalMat));
-
-    mPipline.setMat3("normalMat", normalMat);
-    mPipline.setMat4("model", model);
-    mPipline.setMat4("proj", proj);
+    mPipline.setMat3("normalMat", mModel.mNormalMat);
+    mPipline.setMat4("model", mModel.mModelMat);
+    mPipline.setMat4("proj", mCam.mProjMat);
     std::array<float, 3> lightColor{1.0, 1.0, 1.0};
     mPipline.setVec3("lightColor", lightColor);
     std::array<float, 3> objColor{1.0f, 0.5f, 0.31f};
@@ -206,25 +143,6 @@ int main() {
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
-
-    unsigned int VAO;
-    unsigned int VBO;
-    unsigned int EBO;
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vert_num * 6, vert_vec.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * vert_num, ind_vec.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
 
     float counter = 0.0;
     while (!glfwWindowShouldClose(window)){
@@ -279,21 +197,12 @@ int main() {
 
         // Render
         ImGui::Render();
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        mPipline.use();
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, vert_num, GL_UNSIGNED_INT, 0);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-
+        mPipline.render(mModel);
         // Swap buffers
         glfwSwapBuffers(window);
     }
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
     mPipline.destroy();
 
     glfwDestroyWindow(window);

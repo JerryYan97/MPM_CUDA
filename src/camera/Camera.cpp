@@ -5,7 +5,7 @@
 #include "Camera.h"
 #include <gtc/matrix_transform.hpp>
 
-Camera::Camera() {
+Camera::Camera(int width, int height) {
     mViewDir = glm::vec3(0.f, 0.f, -1.f);
     mLookAt = glm::vec3 (0.f, 0.f, 0.f);
     mDistant = 1.f;
@@ -18,6 +18,7 @@ Camera::Camera() {
     mYaw = -90.f;
     mPitch = 0.f;
     mMouseSensitivity = 0.2f;
+    mProjMat = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
 }
 
 void Camera::updateMat() {

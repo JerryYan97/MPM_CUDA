@@ -17,7 +17,15 @@ add_executable(Jiarui_MPM
 		thirdparties/imgui/backends/imgui_impl_glfw.h
 		thirdparties/imgui/backends/imgui_impl_opengl3.h
 		thirdparties/imgui/backends/imgui_impl_opengl3.cpp
-		src/main.cpp src/shaderProgram/graphicsPipeline.cpp src/shaderProgram/graphicsPipeline.h src/camera/Camera.cpp src/camera/Camera.h)
+		src/main.cpp
+		src/shaderProgram/graphicsPipeline.cpp
+		src/shaderProgram/graphicsPipeline.h
+		src/camera/Camera.cpp
+		src/camera/Camera.h
+		src/model/model.cpp
+		src/model/model.h
+		src/model/mesh.cpp
+		src/model/mesh.h)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
