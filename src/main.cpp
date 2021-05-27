@@ -11,7 +11,8 @@
 #include "shaderProgram/graphicsPipeline.h"
 #include "camera/Camera.h"
 #include "model/model.h"
-
+#include "mesh_query.h"
+#include "simulator/MPMSimulator.h"
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
@@ -87,6 +88,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     mCam.processMouseScroll((float)yoffset);
 }
 
+/* */
 int main() {
     GLFWwindow* window;
     glfwSetErrorCallback(error_callback);
@@ -127,11 +129,14 @@ int main() {
 
     std::string obj_path = std::string(PROJ_PATH) + "/models/sphere.obj";
     // model mModel(obj_path);
+    MPMSimulator mSim;
     std::vector<float> insPos{
         5.f, 0.f, 0.f,
         0.f, 0.f, 0.f,
         -5.f, 0.f, 0.f
     };
+
+
     InstanceModel mModel(obj_path, insPos);
 
     mPipline.setMat3("normalMat", mModel.mNormalMat);

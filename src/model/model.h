@@ -12,14 +12,17 @@
 
 class model {
 protected:
+
+
+public:
     std::vector<float> mVertData;
     std::vector<unsigned int> mIndices;
 
-public:
     unsigned int VBO{}, EBO{}, VAO{};
     glm::mat4 mModelMat;
     glm::mat3 mNormalMat;
     explicit model(std::string &path);
+    void transGRAM();
     int mVertNum;
     ~model();
 };

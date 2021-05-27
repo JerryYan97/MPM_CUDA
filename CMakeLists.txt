@@ -24,7 +24,10 @@ add_executable(Jiarui_MPM
 		src/camera/Camera.h
 		src/model/model.cpp
 		src/model/model.h
-		src/model/InstanceModel.cpp src/model/InstanceModel.h src/simulator/MPMSimulator.cpp src/simulator/MPMSimulator.h)
+		src/model/InstanceModel.cpp
+		src/model/InstanceModel.h
+		src/simulator/MPMSimulator.cpp
+		src/simulator/MPMSimulator.h src/simulator/MPMCUDA.cu src/simulator/MPMCUDA.cuh)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
@@ -32,9 +35,11 @@ target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glm
 		PUBLIC thirdparties/imgui
 		PUBLIC thirdparties/imgui/backends
-		PUBLIC thirdparties/tinyobj)
+		PUBLIC thirdparties/tinyobj
+		PUBLIC thirdparties/mesh_query0.1)
 
 target_link_libraries(Jiarui_MPM
+		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/mesh_query0.1/libmesh_query.a
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/glfw/build/src/libglfw3.a
 		${CMAKE_DL_LIBS}
 		pthread)

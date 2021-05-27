@@ -14,4 +14,10 @@ if __name__ == '__main__':
     os.system('make')
     print("Building and compiling glfw complete.")
 
+    # Build the mesh_query
+    print("Building and compiling mesh_query")
+    os.chdir('../../mesh_query0.1')
+    os.system('make')
+    print("Building and compiling mesh_query complete.")
+
     print("Building and compiling complete.")

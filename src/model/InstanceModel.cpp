@@ -8,6 +8,7 @@
 #include <iostream>
 
 InstanceModel::InstanceModel(std::string &path, std::vector<float>& posVec) : model(path) {
+    this->transGRAM();
     mInstanceNum = posVec.size() / 3;
     glGenBuffers(1, &mInstancedArrayBO);
     glBindBuffer(GL_ARRAY_BUFFER, mInstancedArrayBO);

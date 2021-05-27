@@ -14,7 +14,7 @@ public:
     int mInstanceNum;
     ~InstanceModel();
 private:
-    unsigned int mInstancedArrayBO;
+    unsigned int mInstancedArrayBO{};
 };
 
 
