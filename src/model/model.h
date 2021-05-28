@@ -9,20 +9,25 @@
 #include <string>
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
-
 class model {
 protected:
-
-
+    bool mUseInGL;
 public:
-    std::vector<float> mVertData;
-    std::vector<unsigned int> mIndices;
-
     unsigned int VBO{}, EBO{}, VAO{};
     glm::mat4 mModelMat;
     glm::mat3 mNormalMat;
-    explicit model(std::string &path);
+
+    std::vector<float> mGLVertData;
+    std::vector<unsigned int> mGLIndices;
+    std::vector<int> mQMIndData;
+    std::vector<double> mQMVertData;
+
+    glm::vec3 mUpperBound;
+    glm::vec3 mLowerBound;
+
+    explicit model(std::string &path, float modelSize, bool usedGL);
     void transGRAM();
+    void setTransformation(glm::vec3 scale, glm::vec3 translation, float rotateDegree, glm::vec3 rotateAxis);
     int mVertNum;
     ~model();
 };

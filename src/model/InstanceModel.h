@@ -9,7 +9,7 @@
 
 class InstanceModel : public model{
 public:
-    explicit InstanceModel(std::string &path, std::vector<float>& posVec);
+    explicit InstanceModel(std::string &path, std::vector<float>& posVec, float modelSize);
     void updateInstanceModel(std::vector<float>& posVec);
     int mInstanceNum;
     ~InstanceModel();

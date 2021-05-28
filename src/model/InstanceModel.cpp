@@ -7,7 +7,7 @@
 #include <cstring>
 #include <iostream>
 
-InstanceModel::InstanceModel(std::string &path, std::vector<float>& posVec) : model(path) {
+InstanceModel::InstanceModel(std::string &path, std::vector<float>& posVec, float modelSize) : model(path, modelSize, true) {
     this->transGRAM();
     mInstanceNum = posVec.size() / 3;
     glGenBuffers(1, &mInstancedArrayBO);

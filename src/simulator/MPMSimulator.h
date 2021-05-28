@@ -10,6 +10,7 @@
 
 // In 3D
 struct ParticleGroup{
+    unsigned int particleNum;
     std::vector<double> particlePosVec;
     std::vector<double> particleMassVec;
     std::vector<double> particleVelVec;

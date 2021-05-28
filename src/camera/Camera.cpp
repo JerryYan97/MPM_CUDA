@@ -7,8 +7,8 @@
 
 Camera::Camera(int width, int height) {
     mViewDir = glm::vec3(0.f, 0.f, -1.f);
-    mLookAt = glm::vec3 (0.f, 0.f, 0.f);
-    mDistant = 1.f;
+    mLookAt = glm::vec3 (10.f, 10.f, 10.f);
+    mDistant = 5.f;
 
     mPos = mLookAt + (-mViewDir) * mDistant;
     glm::vec3 revDir = glm::normalize(mPos - mLookAt);

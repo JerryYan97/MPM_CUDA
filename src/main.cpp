@@ -11,7 +11,6 @@
 #include "shaderProgram/graphicsPipeline.h"
 #include "camera/Camera.h"
 #include "model/model.h"
-#include "mesh_query.h"
 #include "simulator/MPMSimulator.h"
 
 float deltaTime = 0.f;
@@ -67,7 +66,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS){
         mCam.processMouseMovement(xoffset, yoffset);
     }
-
 }
 
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
@@ -127,17 +125,13 @@ int main() {
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    std::string obj_path = std::string(PROJ_PATH) + "/models/sphere.obj";
+    std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
+    std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphere.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim;
-    std::vector<float> insPos{
-        5.f, 0.f, 0.f,
-        0.f, 0.f, 0.f,
-        -5.f, 0.f, 0.f
-    };
-
-
-    InstanceModel mModel(obj_path, insPos);
+    MPMSimulator mSim(0.1f, 500, 10, obj_path);
+    std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
+                              mSim.mParticles.particlePosVec.end()};
+    InstanceModel mModel(instance_obj_path, insPos, 0.01f);
 
     mPipline.setMat3("normalMat", mModel.mNormalMat);
     mPipline.setMat4("model", mModel.mModelMat);
@@ -210,11 +204,6 @@ int main() {
         std::array<float, 3> camPos{mCam.mPos[0], mCam.mPos[1], mCam.mPos[2]};
         mPipline.setVec3("camPos", camPos);
 
-        insPos[0] += 0.01;
-        insPos[3] += 0.01;
-        insPos[6] += 0.01;
-
-        mModel.updateInstanceModel(insPos);
         // Render
         ImGui::Render();
         mPipline.renderInstance(mModel);
