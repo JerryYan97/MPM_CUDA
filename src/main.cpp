@@ -122,13 +122,14 @@ int main() {
     std::string fPath = std::string(PROJ_PATH) + "/src/shaders/sphereInstance.frag";
     glEnable(GL_DEPTH_TEST);
     graphicsPipeline mPipline(vPath,fPath);
+    mPipline.cullBackFace();
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
-    std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphere.obj";
+    std::string obj_path = std::string(PROJ_PATH) + "/models/bunny3K.obj";
+    std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.1f, 500, 10, obj_path);
+    MPMSimulator mSim(0.02f, 1000, 15, obj_path);
     std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
                               mSim.mParticles.particlePosVec.end()};
     InstanceModel mModel(instance_obj_path, insPos, 0.01f);

@@ -112,3 +112,7 @@ void graphicsPipeline::renderInstance(InstanceModel& renderedModel) {
     glBindVertexArray(renderedModel.VAO);
     glDrawElementsInstanced(GL_TRIANGLES, renderedModel.mVertNum, GL_UNSIGNED_INT, 0, renderedModel.mInstanceNum);
 }
+
+void graphicsPipeline::cullBackFace() {
+    glEnable(GL_CULL_FACE);
+}

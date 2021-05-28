@@ -16,17 +16,19 @@ MPMSimulator::MPMSimulator(double gap, unsigned int nodeNumDim, unsigned int par
     mGrid.originCorner = {0.0, 0.0, 0.0};
     model mModel(sampleModelPath, 1.f, false);
     mModel.setTransformation(glm::vec3(1.f),
-                             glm::vec3(10.f, 10.f, 10.f),
+                             glm::vec3(5.f, 5.f, 5.f),
                              0.f,
                              glm::vec3(1.f, 0.f, 0.f));
 
     // Check the obj bounding box is within the grid.
     if (mModel.mLowerBound[0] < 0.f || mModel.mLowerBound[1] < 0.f || mModel.mLowerBound[2] < 0.f){
-        throw "ERROR: OBJ lower bound is smaller than grid's origin.";
+        std::cerr << "ERROR: OBJ lower bound is smaller than grid's origin." << std::endl;
+        exit(1);
     }
     float gridUpperBound = (nodeNumDim - 1) * gap;
     if (mModel.mUpperBound[0] > gridUpperBound || mModel.mUpperBound[1] > gridUpperBound || mModel.mUpperBound[2] > gridUpperBound){
-        throw "ERROR: OBJ upper bound is out of the grid.";
+        std::cerr << "ERROR: OBJ upper bound is out of the grid." << std::endl;
+        exit(1);
     }
 
     // Get lower and upper grid index
@@ -66,6 +68,7 @@ MPMSimulator::MPMSimulator(double gap, unsigned int nodeNumDim, unsigned int par
         }
     }
     mParticles.particleNum = mParticles.particlePosVec.size() / 3;
+    std::cout << "Sampled particle number:" << mParticles.particleNum << std::endl;
     mParticles.particlePosVec.resize(mParticles.particleNum * 3);
     mParticles.particleMassVec.resize(mParticles.particleNum);
     mParticles.particleVelVec.resize(mParticles.particleNum * 3);

@@ -50,10 +50,10 @@ model::model(std::string &path, float modelSize, bool usedGL) {
                 tinyobj::real_t vy = attrib.vertices[3*size_t(idx.vertex_index)+1];
                 tinyobj::real_t vz = attrib.vertices[3*size_t(idx.vertex_index)+2];
 
-                tinyobj::real_t nx = attrib.normals[3*size_t(idx.normal_index)+0];
-                tinyobj::real_t ny = attrib.normals[3*size_t(idx.normal_index)+1];
-                tinyobj::real_t nz = attrib.normals[3*size_t(idx.normal_index)+2];
                 if (usedGL){
+                    tinyobj::real_t nx = attrib.normals[3*size_t(idx.normal_index)+0];
+                    tinyobj::real_t ny = attrib.normals[3*size_t(idx.normal_index)+1];
+                    tinyobj::real_t nz = attrib.normals[3*size_t(idx.normal_index)+2];
                     mGLVertData[vert_idx * 6] = vx;
                     mGLVertData[vert_idx * 6 + 1] = vy;
                     mGLVertData[vert_idx * 6 + 2] = vz;

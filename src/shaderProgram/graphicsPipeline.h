@@ -26,6 +26,8 @@ public:
 
     void render(model& renderedModel);
     void renderInstance(InstanceModel& renderedModel);
+
+    void cullBackFace();
 };
 
 
