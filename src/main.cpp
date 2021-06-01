@@ -11,7 +11,7 @@
 #include "shaderProgram/graphicsPipeline.h"
 #include "camera/Camera.h"
 #include "model/model.h"
-#include "simulator/MPMSimulator.h"
+#include "simulator/MPMSimulator.cuh"
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
@@ -116,8 +116,6 @@ int main() {
         return -1;
     }
 
-    // std::string vPath = std::string(PROJ_PATH) + "/src/shaders/myShader.vert";
-    // std::string fPath = std::string(PROJ_PATH) + "/src/shaders/myShader.frag";
     std::string vPath = std::string(PROJ_PATH) + "/src/shaders/sphereInstance.vert";
     std::string fPath = std::string(PROJ_PATH) + "/src/shaders/sphereInstance.frag";
     glEnable(GL_DEPTH_TEST);
@@ -129,7 +127,7 @@ int main() {
     std::string obj_path = std::string(PROJ_PATH) + "/models/bunny3K.obj";
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.02f, 1000, 15, obj_path);
+    MPMSimulator mSim(0.1f, 1.0/24.0, 500, 15, obj_path);
     std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
                               mSim.mParticles.particlePosVec.end()};
     InstanceModel mModel(instance_obj_path, insPos, 0.01f);
@@ -159,12 +157,15 @@ int main() {
         glfwPollEvents();
         processMovementInput(window);
 
+        mSim.step();
+        std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
+        mModel.updateInstanceModel(tmpParticlePos);
+
         float curFrame = glfwGetTime();
         deltaTime = curFrame - lastFrame;
         lastFrame = curFrame;
 
         // Start the Dear ImGui frame
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();

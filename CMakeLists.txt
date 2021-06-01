@@ -27,7 +27,9 @@ add_executable(Jiarui_MPM
 		src/model/InstanceModel.cpp
 		src/model/InstanceModel.h
 		src/simulator/MPMSimulator.cpp
-		src/simulator/MPMSimulator.h src/simulator/MPMCUDA.cu src/simulator/MPMCUDA.cuh)
+		src/simulator/MPMSimulator.cuh
+		src/simulator/MPMCUDA.cu
+		)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
@@ -43,3 +45,10 @@ target_link_libraries(Jiarui_MPM
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/glfw/build/src/libglfw3.a
 		${CMAKE_DL_LIBS}
 		pthread)
+
+# set_property(TARGET Jiarui_MPM PROPERTY CUDA_ARCHITECTURES 75)
+string(APPEND CMAKE_CUDA_FLAGS " -gencode arch=compute_70,code=sm_70")
+
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+	add_definitions(-DDEBUG=1)
+endif()

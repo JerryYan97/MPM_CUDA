@@ -7,6 +7,9 @@
 
 #include <vector>
 #include <array>
+#include <cuda_runtime.h>
+#include <iostream>
+
 
 // In 3D
 struct ParticleGroup{
@@ -14,25 +17,39 @@ struct ParticleGroup{
     std::vector<double> particlePosVec;
     std::vector<double> particleMassVec;
     std::vector<double> particleVelVec;
+    double* pPosVecGRAM;
+    double* pMassVecGRAM;
+    double* pVelVecGRAM;
+    size_t posVecByteSize;
+    size_t massVecByteSize;
+    size_t velVecByteSize;
 };
 
 struct Grid{
     double h;
     unsigned int nodeNumDim; // The number of node for each dimension. We assume the grid is a cube.
     std::array<double, 3> originCorner;
-    std::vector<double> nodeMassVec;
-    std::vector<double> nodeVelVec;
+    double* nodeMassVec;
+    double* nodeVelVec;
+    size_t massVecByteSize;
+    size_t velVecByteSize;
 };
 
 class MPMSimulator {
+private:
+    double dt;
+
 public:
+    double t;
     ParticleGroup mParticles{};
     Grid mGrid{};
     MPMSimulator(double gap,
+                 double dt,
                  unsigned int nodeNumDim,
                  unsigned int particleNumPerCell,
                  std::string& sampleModelPath);
-
+    void step();
+    ~MPMSimulator();
 };
 
 
