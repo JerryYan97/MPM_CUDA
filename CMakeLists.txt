@@ -29,7 +29,7 @@ add_executable(Jiarui_MPM
 		src/simulator/MPMSimulator.cpp
 		src/simulator/MPMSimulator.cuh
 		src/simulator/MPMCUDA.cu
-		)
+        src/simulator/material/Elasiticity.cuh src/simulator/material/Elasiticity.cu)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
@@ -38,7 +38,8 @@ target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/imgui
 		PUBLIC thirdparties/imgui/backends
 		PUBLIC thirdparties/tinyobj
-		PUBLIC thirdparties/mesh_query0.1)
+		PUBLIC thirdparties/mesh_query0.1
+		PUBLIC thirdparties/cudaSVD)
 
 target_link_libraries(Jiarui_MPM
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/mesh_query0.1/libmesh_query.a

@@ -19,8 +19,9 @@ public:
 
     std::vector<float> mGLVertData;
     std::vector<unsigned int> mGLIndices;
-    std::vector<int> mQMIndData;
+    std::vector<int> mQMIndData; // Query mesh indices: For MPM sampling.
     std::vector<double> mQMVertData;
+    std::vector<unsigned int> mVertLength; // Support multiple models.
 
     glm::vec3 mUpperBound;
     glm::vec3 mLowerBound;

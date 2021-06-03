@@ -7,7 +7,7 @@
 #include <math.h>
 #include <assert.h>
 #include <thrust/device_vector.h>
-
+#include "svd3_cuda.h"
 
 __device__ double BSplineInterpolation1D(const double x){
     double abs_x = abs(x);
@@ -75,7 +75,7 @@ __global__ void P2G(unsigned int pNum,
     }
 }
 
-__global__ void VelUpdate(unsigned int gNum, double dt, double* gMassVec, double* gVelMotVec){
+__global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity, double* gMassVec, double* gVelMotVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < gNum){
         double mass = gMassVec[i];
@@ -91,7 +91,7 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double* gMassVec, double
             gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] / mass;
             gVelMotVec[3 * i + 2] = gVelMotVec[3 * i + 2] / mass;
             // Include gravity into velocity.
-            gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] - 9.8 * dt;
+            gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] + ext_gravity * dt;
             // printf("gNode vel:[%f, %f, %f]", gVelMotVec[3 * i], gVelMotVec[3 * i + 1], gVelMotVec[3 * i + 2]);
         }
     }
@@ -164,6 +164,11 @@ void MPMSimulator::step() {
         std::cerr << "Clean grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
+    err = cudaMemset(mGrid.nodeForceVec, 0, mGrid.forceVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Clean grid force error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
 
     // 2. Transfer mass to the grid.
     // 3. Transfer velocity(Momentum) to the grid.
@@ -217,7 +222,7 @@ void MPMSimulator::step() {
     int gNum = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim;
     int gThreadsPerBlock = 256;
     int gBlocksPerGrid = (gNum + gThreadsPerBlock - 1) / gThreadsPerBlock;
-    VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, dt, mGrid.nodeMassVec, mGrid.nodeVelVec);
+    VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, dt, ext_gravity, mGrid.nodeMassVec, mGrid.nodeVelVec);
     cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess){
@@ -276,3 +281,5 @@ void MPMSimulator::step() {
     std::cout << "vel energy difference:" << vel_energy_diff << " gravity energy difference:" << gravity_energy << std::endl;
 #endif
 }
+
+

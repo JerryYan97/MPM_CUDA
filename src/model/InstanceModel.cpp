@@ -7,7 +7,8 @@
 #include <cstring>
 #include <iostream>
 
-InstanceModel::InstanceModel(std::string &path, std::vector<float>& posVec, float modelSize) : model(path, modelSize, true) {
+// For single obj init.
+InstanceModel::InstanceModel(std::string &InstanceMeshPath, std::vector<float>& posVec, float modelSize) : model(InstanceMeshPath, modelSize, true) {
     this->transGRAM();
     mInstanceNum = posVec.size() / 3;
     glGenBuffers(1, &mInstancedArrayBO);

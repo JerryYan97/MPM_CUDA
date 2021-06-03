@@ -10,6 +10,7 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+class MeshObject;
 
 // In 3D
 struct ParticleGroup{
@@ -17,12 +18,16 @@ struct ParticleGroup{
     std::vector<double> particlePosVec;
     std::vector<double> particleMassVec;
     std::vector<double> particleVelVec;
+    std::vector<double> particleVolVec;
+    std::vector<unsigned int> particleNumDiv;
     double* pPosVecGRAM;
     double* pMassVecGRAM;
     double* pVelVecGRAM;
+    double* pVolVecGRAM;
     size_t posVecByteSize;
     size_t massVecByteSize;
     size_t velVecByteSize;
+    size_t volVecByteSize;
 };
 
 struct Grid{
@@ -31,13 +36,21 @@ struct Grid{
     std::array<double, 3> originCorner;
     double* nodeMassVec;
     double* nodeVelVec;
+    double* nodeForceVec; // Elastic force now.
     size_t massVecByteSize;
     size_t velVecByteSize;
+    size_t forceVecByteSize;
 };
 
 class MPMSimulator {
 private:
     double dt;
+    double ext_gravity;
+
+    void initGrid(double gap, unsigned int nodeNumDim);
+    double calVolmue(std::string& place);
+    void showMemUsage();
+    void initParticles(std::vector<double>& volVec);
 
 public:
     double t;
@@ -48,6 +61,13 @@ public:
                  unsigned int nodeNumDim,
                  unsigned int particleNumPerCell,
                  std::string& sampleModelPath);
+    MPMSimulator(double gap,
+                 double dt,
+                 unsigned int nodeNumDim,
+                 unsigned int particleNumPerCell,
+                 std::string &sampleModelPath1,
+                 std::string &sampleModelPath2);
+    void setVel(std::vector<double>& particleVelVec);
     void step();
     ~MPMSimulator();
 };
