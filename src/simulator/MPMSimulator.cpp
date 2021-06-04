@@ -33,11 +33,19 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
                       pVol);
         }
     }
+    // Init the deformation gradient.
+    std::vector<double> tmpDeformationGradientVec(mParticles.particleNum * 9, 0.0);
+    for (int i = 0; i < mParticles.particleNum; ++i) {
+        tmpDeformationGradientVec[9 * i] = 1.0;
+        tmpDeformationGradientVec[9 * i + 4] = 1.0;
+        tmpDeformationGradientVec[9 * i + 8] = 1.0;
+    }
 
     mParticles.posVecByteSize = mParticles.particleNum * 3 * sizeof(double);
     mParticles.massVecByteSize = mParticles.particleNum * sizeof(double);
     mParticles.velVecByteSize = mParticles.particleNum * 3 * sizeof(double);
     mParticles.volVecByteSize = mParticles.particleNum * sizeof(double);
+    mParticles.dgVecByteSize = mParticles.particleNum * 9 * sizeof(double); // 11, 12, 13, 21, 22, 23, 31, 32, 33.
 
     err = cudaMalloc((void **)&mParticles.pPosVecGRAM, mParticles.posVecByteSize);
     if (err != cudaSuccess){
@@ -84,6 +92,18 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
                      mParticles.volVecByteSize, cudaMemcpyHostToDevice);
     if (err != cudaSuccess){
         std::cerr << "Init particles volume error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+
+    err = cudaMalloc((void **)&mParticles.pDeformationGradientGRAM, mParticles.dgVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Allocate particles deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+    err = cudaMemcpy(mParticles.pDeformationGradientGRAM, tmpDeformationGradientVec.data(),
+                     mParticles.dgVecByteSize, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess){
+        std::cerr << "Init deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 }
@@ -136,6 +156,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     this->dt = dt;
     t = 0.0;
     ext_gravity = -9.8;
+    FixedCorotatedMaterial mMaterial(0.01e9, 0.49);
+    mParticles.mMaterialVec.push_back(mMaterial);
 
     initGrid(gap, nodeNumDim);
 
@@ -223,6 +245,10 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     this->dt = dt;
     t = 0.0;
     ext_gravity = 0.0;
+    FixedCorotatedMaterial mMaterial1(0.01e9, 0.49);
+    FixedCorotatedMaterial mMaterial2(0.01e9, 0.49);
+    mParticles.mMaterialVec.push_back(mMaterial1);
+    mParticles.mMaterialVec.push_back(mMaterial2);
 
     initGrid(gap, nodeNumDim);
 
@@ -230,12 +256,12 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel1(sampleModelPath1, 1.f, false);
     mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(10.f, 40.f, 5.f),
+                              glm::vec3(8.f, 10.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
     model mModel2(sampleModelPath1, 1.f, false);
     mModel2.setTransformation(glm::vec3(1.f),
-                              glm::vec3(5.f, 40.f, 5.f),
+                              glm::vec3(3.f, 10.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
 

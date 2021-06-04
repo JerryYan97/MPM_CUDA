@@ -127,21 +127,20 @@ int main() {
     std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.15f, 1.0/24.0, 300, 20, obj_path, obj_path);
+    MPMSimulator mSim(0.05f, 1.0/24.0, 300, 8, obj_path, obj_path);
     // MPMSimulator mSim(0.1f, 1.0/24.0, 500, 15, obj_path);
 
     // Jello cube collides case:
-    /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         if (i < mSim.mParticles.particleNum / 2){
-            initVel[3 * i] = -1.0;
+            initVel[3 * i] = -2.0;
         }else{
-            initVel[3 * i] = 1.0;
+            initVel[3 * i] = 2.0;
         }
     }
     mSim.setVel(initVel);
-    */
+
 
     std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
                               mSim.mParticles.particlePosVec.end()};

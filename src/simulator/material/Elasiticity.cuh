@@ -5,17 +5,7 @@
 #ifndef JIARUI_MPM_ELASITICITY_CUH
 #define JIARUI_MPM_ELASITICITY_CUH
 
-__device__ void FixedCorotatedPStress(float F11, float F12, float F13,
-                                      float F21, float F22, float F23,
-                                      float F31, float F32, float F33,
-                                      float mu, float lambda,
-                                      float& P11, float& P12, float& P13,
-                                      float& P21, float& P22, float& P23,
-                                      float& P31, float& P32, float& P33);
-
-__device__ void FixedCorotatedPStressSigma(float sigma1, float sigma2, float sigma3,
-                                           float mu, float lambda,
-                                           float& dig1, float& dig2, float& dig3);
+#include <iostream>
 
 class FixedCorotatedMaterial{
 private:
@@ -25,7 +15,20 @@ private:
 public:
     double mLambda;
     double mMu;
-    FixedCorotatedMaterial(double iYM, double iPR);
+    FixedCorotatedMaterial(double iYM, double iPR){
+        mYoungsModulus = iYM;
+        mPoissonRatio = iPR;
+        if(mYoungsModulus < 0){
+            std::cerr << "Youngs Modulus is out of range." << std::endl;
+            exit(1);
+        }
+        if(mPoissonRatio < 0 || mPoissonRatio > 0.5){
+            std::cerr << "Poison Ratio is out of range." << std::endl;
+            exit(1);
+        }
+        mMu = mYoungsModulus / (2 * (1 + mPoissonRatio));
+        mLambda = mYoungsModulus * mPoissonRatio / ((1 + mPoissonRatio) * (1 - 2 * mPoissonRatio));
+    }
 };
 
 

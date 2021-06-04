@@ -9,12 +9,15 @@
 #include <array>
 #include <cuda_runtime.h>
 #include <iostream>
+#include "material/Elasiticity.cuh"
 
 class MeshObject;
+class FixedCorotatedMaterial;
 
 // In 3D
 struct ParticleGroup{
     unsigned int particleNum;
+    std::vector<FixedCorotatedMaterial> mMaterialVec; // It may needs to be changed to a vector in the future.
     std::vector<double> particlePosVec;
     std::vector<double> particleMassVec;
     std::vector<double> particleVelVec;
@@ -24,10 +27,12 @@ struct ParticleGroup{
     double* pMassVecGRAM;
     double* pVelVecGRAM;
     double* pVolVecGRAM;
+    double* pDeformationGradientGRAM;
     size_t posVecByteSize;
     size_t massVecByteSize;
     size_t velVecByteSize;
     size_t volVecByteSize;
+    size_t dgVecByteSize;
 };
 
 struct Grid{

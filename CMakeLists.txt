@@ -29,7 +29,8 @@ add_executable(Jiarui_MPM
 		src/simulator/MPMSimulator.cpp
 		src/simulator/MPMSimulator.cuh
 		src/simulator/MPMCUDA.cu
-        src/simulator/material/Elasiticity.cuh src/simulator/material/Elasiticity.cu)
+        src/simulator/material/Elasiticity.cuh
+		)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
