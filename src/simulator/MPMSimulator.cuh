@@ -51,6 +51,8 @@ class MPMSimulator {
 private:
     double dt;
     double ext_gravity;
+    double current_time;
+    int current_frame;
 
     void initGrid(double gap, unsigned int nodeNumDim);
     double calVolmue(std::string& place);

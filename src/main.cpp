@@ -20,6 +20,7 @@ int height = 480;
 float lastX = width / 2.0f;
 float lastY = height / 2.0f;
 bool firstMouse = true;
+bool process = false;
 
 Camera mCam(width, height);
 
@@ -27,26 +28,6 @@ void error_callback(int error, const char* desc){
     fprintf(stderr, "Error: %s\n", desc);
 }
 
-void processMovementInput(GLFWwindow *window)
-{
-    float camSpeed = 5.f * deltaTime;
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
-        mCam.mLookAt += camSpeed * mCam.mViewDir;
-        mCam.updateMat();
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
-        mCam.mLookAt -= camSpeed * mCam.mViewDir;
-        mCam.updateMat();
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        mCam.mLookAt -= camSpeed * mCam.mRight;
-        mCam.updateMat();
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-        mCam.mLookAt += camSpeed * mCam.mRight;
-        mCam.updateMat();
-    }
-}
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
@@ -65,6 +46,13 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 
     if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS){
         mCam.processMouseMovement(xoffset, yoffset);
+    }
+
+    float camSpeed = 2.f * deltaTime;
+    if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS){
+        mCam.mLookAt -= camSpeed * mCam.mRight * xoffset;
+        mCam.mLookAt -= camSpeed * mCam.mUp * yoffset;
+        mCam.updateMat();
     }
 }
 
@@ -127,10 +115,11 @@ int main() {
     std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.05f, 1.0/24.0, 300, 8, obj_path, obj_path);
-    // MPMSimulator mSim(0.1f, 1.0/24.0, 500, 15, obj_path);
+    MPMSimulator mSim(0.1f, 1.0/24.0, 300, 8, obj_path, obj_path);
+    // MPMSimulator mSim(0.1f, 1.0/24.0, 200, 8, obj_path);
 
     // Jello cube collides case:
+
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         if (i < mSim.mParticles.particleNum / 2){
@@ -140,6 +129,14 @@ int main() {
         }
     }
     mSim.setVel(initVel);
+
+    /*
+    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
+    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
+        initVel[3 * i + 1] = -0.5;
+    }
+    mSim.setVel(initVel);
+    */
 
 
     std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
@@ -169,9 +166,15 @@ int main() {
     float counter = 0.0;
     while (!glfwWindowShouldClose(window)){
         glfwPollEvents();
-        processMovementInput(window);
+        // processMovementInput(window);
 
-        mSim.step();
+        if (process){
+            mSim.step();
+            process = false;
+        }
+
+
+
         std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
         mModel.updateInstanceModel(tmpParticlePos);
 

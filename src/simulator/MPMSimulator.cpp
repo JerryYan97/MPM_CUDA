@@ -155,9 +155,11 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     // Init info.
     this->dt = dt;
     t = 0.0;
-    ext_gravity = -9.8;
+    ext_gravity = 0.0;
     FixedCorotatedMaterial mMaterial(0.01e9, 0.49);
     mParticles.mMaterialVec.push_back(mMaterial);
+    current_frame = 0;
+    current_time = 0.0;
 
     initGrid(gap, nodeNumDim);
 
@@ -165,7 +167,7 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel(sampleModelPath, 1.f, false);
     mModel.setTransformation(glm::vec3(1.f),
-                             glm::vec3(5.f, 40.f, 5.f),
+                             glm::vec3(5.f, 5.f, 5.f),
                              0.f,
                              glm::vec3(1.f, 0.f, 0.f));
 
@@ -249,6 +251,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     FixedCorotatedMaterial mMaterial2(0.01e9, 0.49);
     mParticles.mMaterialVec.push_back(mMaterial1);
     mParticles.mMaterialVec.push_back(mMaterial2);
+    current_frame = 0;
+    current_time = 0.0;
 
     initGrid(gap, nodeNumDim);
 
@@ -256,12 +260,12 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel1(sampleModelPath1, 1.f, false);
     mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(8.f, 10.f, 5.f),
+                              glm::vec3(5.5f, 10.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
     model mModel2(sampleModelPath1, 1.f, false);
     mModel2.setTransformation(glm::vec3(1.f),
-                              glm::vec3(3.f, 10.f, 5.f),
+                              glm::vec3(3.5f, 10.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
 
@@ -373,11 +377,17 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
 #ifdef DEBUG
     // Check particle volume.
     double lastVol = mParticles.particleVolVec[0];
+    double lastMass = mParticles.particleMassVec[0];
     std::cout << "vol0:" << lastVol << std::endl;
+    std::cout << "mass0:" << lastMass << std::endl;
     for (int i = 0; i < mParticles.particleNum; ++i) {
         if (lastVol != mParticles.particleVolVec[i]){
             lastVol = mParticles.particleVolVec[i];
             std::cout << "vol" << i+1 << ":" << lastVol << std::endl;
+        }
+        if (lastMass != mParticles.particleMassVec[i]){
+            lastMass = mParticles.particleMassVec[i];
+            std::cout << "mass" << i+1 << ":" << lastMass << std::endl;
         }
     }
 #endif
