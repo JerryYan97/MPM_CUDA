@@ -11,10 +11,9 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
     cudaError_t err = cudaSuccess;
     // Init the sampling result.
     mParticles.particleMassVec.resize(mParticles.particleNum);
-    std::fill(mParticles.particleMassVec.begin(), mParticles.particleMassVec.end(), 1.0);
     mParticles.particleVelVec.resize(mParticles.particleNum * 3);
     std::fill(mParticles.particleVelVec.begin(), mParticles.particleVelVec.end(), 0.0);
-    // Init the volume result.
+    // Init the volume, mass result.
     mParticles.particleVolVec.resize(mParticles.particleNum);
     for (int i = 0; i < volVec.size(); ++i) {
         double pVol = volVec[i] / double(mParticles.particleNumDiv[i]);
@@ -22,6 +21,9 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
             std::fill(mParticles.particleVolVec.begin(),
                       mParticles.particleVolVec.begin() + mParticles.particleNumDiv[0],
                       pVol);
+            std::fill(mParticles.particleMassVec.begin(),
+                      mParticles.particleMassVec.end() + mParticles.particleNumDiv[0],
+                      pVol * mParticles.mMaterialVec[i].mDensity);
         }
         else{
             int beginOffset = 0;
@@ -31,6 +33,9 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
             std::fill(mParticles.particleVolVec.begin() + beginOffset,
                       mParticles.particleVolVec.begin() + beginOffset + mParticles.particleNumDiv[i],
                       pVol);
+            std::fill(mParticles.particleMassVec.begin() + beginOffset,
+                      mParticles.particleMassVec.end() + beginOffset + mParticles.particleNumDiv[i],
+                      pVol * mParticles.mMaterialVec[i].mDensity);
         }
     }
     // Init the deformation gradient.
@@ -156,7 +161,7 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     this->dt = dt;
     t = 0.0;
     ext_gravity = 0.0;
-    FixedCorotatedMaterial mMaterial(0.01e9, 0.49);
+    FixedCorotatedMaterial mMaterial(0.01e9, 0.49, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial);
     current_frame = 0;
     current_time = 0.0;
@@ -247,8 +252,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     this->dt = dt;
     t = 0.0;
     ext_gravity = 0.0;
-    FixedCorotatedMaterial mMaterial1(0.01e9, 0.49);
-    FixedCorotatedMaterial mMaterial2(0.01e9, 0.49);
+    FixedCorotatedMaterial mMaterial1(1e3, 0.2, 1.1);
+    FixedCorotatedMaterial mMaterial2(1e3, 0.2, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial1);
     mParticles.mMaterialVec.push_back(mMaterial2);
     current_frame = 0;
@@ -260,12 +265,12 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel1(sampleModelPath1, 1.f, false);
     mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(5.5f, 10.f, 5.f),
+                              glm::vec3(6.0f, 5.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
     model mModel2(sampleModelPath1, 1.f, false);
     mModel2.setTransformation(glm::vec3(1.f),
-                              glm::vec3(3.5f, 10.f, 5.f),
+                              glm::vec3(3.0f, 5.f, 5.f),
                               0.f,
                               glm::vec3(1.f, 0.f, 0.f));
 
@@ -315,6 +320,10 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
                     glm::vec4 localPt = model1Inv * glm::vec4(node_x, node_y, node_z, 1.f);
                     double pt[3] = {localPt[0], localPt[1], localPt[2]};
                     if (point_inside_mesh(pt, mMOBJ1)){
+                        if (ix == (upper1_x_idx - 1)){
+                            int b1_r_pidx = mParticles.particlePosVec.size() / 3;
+                            idx_vec.push_back(b1_r_pidx);
+                        }
                         mParticles.particlePosVec.push_back(node_x);
                         mParticles.particlePosVec.push_back(node_y);
                         mParticles.particlePosVec.push_back(node_z);
@@ -323,6 +332,13 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
             }
         }
     }
+
+    /* 51984
+    std::cout << "The box right idx are:" << std::endl;
+    for (int i = 0; i < idx_vec.size(); ++i) {
+        std::cout << idx_vec[i] << std::endl;
+    }
+    */
 
     int model1ParticleNum = mParticles.particlePosVec.size() / 3;
 
@@ -401,6 +417,13 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
               << std::max(mModel1.mUpperBound[0], mModel2.mUpperBound[0]) << " "
               << std::max(mModel1.mUpperBound[1], mModel2.mUpperBound[1]) << " "
               << std::max(mModel1.mUpperBound[2], mModel2.mUpperBound[2]) << std::endl;
+
+    min_bound_x = std::min(mModel1.mLowerBound[0], mModel2.mLowerBound[0]) - DBL_EPSILON;
+    min_bound_y = std::min(mModel1.mLowerBound[1], mModel2.mLowerBound[1]) - DBL_EPSILON;
+    min_bound_z = std::min(mModel1.mLowerBound[2], mModel2.mLowerBound[2]) - DBL_EPSILON;
+    max_bound_x = std::max(mModel1.mUpperBound[0], mModel2.mUpperBound[0]) + DBL_EPSILON;
+    max_bound_y = std::max(mModel1.mUpperBound[1], mModel2.mUpperBound[1]) + DBL_EPSILON;
+    max_bound_z = std::max(mModel1.mUpperBound[2], mModel2.mUpperBound[2]) + DBL_EPSILON;
 
     showMemUsage();
 }

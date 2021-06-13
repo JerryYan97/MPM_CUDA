@@ -15,7 +15,8 @@ private:
 public:
     double mLambda;
     double mMu;
-    FixedCorotatedMaterial(double iYM, double iPR){
+    double mDensity;
+    FixedCorotatedMaterial(double iYM, double iPR, double iDensity){
         mYoungsModulus = iYM;
         mPoissonRatio = iPR;
         if(mYoungsModulus < 0){
@@ -28,6 +29,7 @@ public:
         }
         mMu = mYoungsModulus / (2 * (1 + mPoissonRatio));
         mLambda = mYoungsModulus * mPoissonRatio / ((1 + mPoissonRatio) * (1 - 2 * mPoissonRatio));
+        mDensity = iDensity;
     }
 };
 

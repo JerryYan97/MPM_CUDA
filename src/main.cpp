@@ -28,7 +28,6 @@ void error_callback(int error, const char* desc){
     fprintf(stderr, "Error: %s\n", desc);
 }
 
-
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
     if (firstMouse)
@@ -59,6 +58,9 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS){
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+    if (key == GLFW_KEY_M && action == GLFW_PRESS){
+        process = true;
     }
 }
 
@@ -115,7 +117,7 @@ int main() {
     std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.1f, 1.0/24.0, 300, 8, obj_path, obj_path);
+    MPMSimulator mSim(0.1f, 1.0/5000.0, 300, 10, obj_path, obj_path);
     // MPMSimulator mSim(0.1f, 1.0/24.0, 200, 8, obj_path);
 
     // Jello cube collides case:
@@ -123,9 +125,9 @@ int main() {
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         if (i < mSim.mParticles.particleNum / 2){
-            initVel[3 * i] = -2.0;
+            initVel[3 * i] = -8.0;
         }else{
-            initVel[3 * i] = 2.0;
+            initVel[3 * i] = 8.0;
         }
     }
     mSim.setVel(initVel);
@@ -167,10 +169,10 @@ int main() {
     while (!glfwWindowShouldClose(window)){
         glfwPollEvents();
         // processMovementInput(window);
-
+        process = true;
         if (process){
             mSim.step();
-            process = false;
+            // process = false;
         }
 
 

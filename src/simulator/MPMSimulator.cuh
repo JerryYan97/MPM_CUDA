@@ -49,10 +49,20 @@ struct Grid{
 
 class MPMSimulator {
 private:
+    // Debug:
+    std::vector<int> idx_vec;
+
     double dt;
     double ext_gravity;
     double current_time;
     int current_frame;
+
+    double min_bound_x;
+    double min_bound_y;
+    double min_bound_z;
+    double max_bound_x;
+    double max_bound_y;
+    double max_bound_z;
 
     void initGrid(double gap, unsigned int nodeNumDim);
     double calVolmue(std::string& place);
