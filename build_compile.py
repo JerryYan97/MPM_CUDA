@@ -6,6 +6,8 @@ import os
 if __name__ == '__main__':
     root_dir = os.getcwd()
 
+    os.makedirs('./Animations', exist_ok=True)
+
     # Build the glfw
     print("Building and compiling glfw.")
     os.makedirs('./thirdparties/glfw/build', exist_ok=True)
@@ -19,5 +21,14 @@ if __name__ == '__main__':
     os.chdir('../../mesh_query0.1')
     os.system('make')
     print("Building and compiling mesh_query complete.")
+
+    # Build the partio
+    print("Building and compiling partio")
+    os.chdir('../../partio')
+    os.makedirs('./build', exist_ok=True)
+    os.chdir('./build')
+    os.system('cmake ..')
+    os.system('make')
+    print("Building and compiling partio complete.")
 
     print("Building and compiling complete.")

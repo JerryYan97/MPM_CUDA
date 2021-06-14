@@ -12,6 +12,9 @@
 #include "camera/Camera.h"
 #include "model/model.h"
 #include "simulator/MPMSimulator.cuh"
+#include "utilities/FilesIO.h"
+#include <sstream>
+#include <iomanip>
 
 float deltaTime = 0.f;
 float lastFrame = 0.f;
@@ -21,6 +24,9 @@ float lastX = width / 2.0f;
 float lastY = height / 2.0f;
 bool firstMouse = true;
 bool process = false;
+int outputFrameID = 0;
+int frameRate = 24;
+float timePerFrame = 1.f / float(frameRate);
 
 Camera mCam(width, height);
 
@@ -78,6 +84,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
 /* */
 int main() {
+
+    // Delete files in Animations
+    std::string cmd = "exec rm -r " + std::string(PROJ_PATH) + "/Animations/*";
+    system(cmd.c_str());
+
     GLFWwindow* window;
     glfwSetErrorCallback(error_callback);
     if(!glfwInit()){
@@ -175,10 +186,18 @@ int main() {
             // process = false;
         }
 
-
-
         std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
+
         mModel.updateInstanceModel(tmpParticlePos);
+
+        if (int(mSim.current_time / timePerFrame) >= outputFrameID){
+            std::stringstream ss;
+            ss << std::setw(6) << std::setfill('0') << outputFrameID;
+            std::string s = ss.str();
+            std::string oFrameNamePath = std::string(PROJ_PATH) + "/Animations/Frame" + s + ".bgeo";
+            OutputBego(oFrameNamePath, tmpParticlePos);
+            ++outputFrameID;
+        }
 
         float curFrame = glfwGetTime();
         deltaTime = curFrame - lastFrame;

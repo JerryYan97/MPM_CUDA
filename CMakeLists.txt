@@ -30,7 +30,8 @@ add_executable(Jiarui_MPM
 		src/simulator/MPMSimulator.cuh
 		src/simulator/MPMCUDA.cu
         src/simulator/material/Elasiticity.cuh
-		)
+		src/utilities/FilesIO.cpp
+		src/utilities/FilesIO.h)
 
 target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/glfw/include
@@ -40,11 +41,13 @@ target_include_directories(Jiarui_MPM
 		PUBLIC thirdparties/imgui/backends
 		PUBLIC thirdparties/tinyobj
 		PUBLIC thirdparties/mesh_query0.1
-		PUBLIC thirdparties/cudaSVD)
+		PUBLIC thirdparties/cudaSVD
+		PUBLIC thirdparties/partio/src/lib)
 
 target_link_libraries(Jiarui_MPM
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/mesh_query0.1/libmesh_query.a
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/glfw/build/src/libglfw3.a
+		${CMAKE_CURRENT_SOURCE_DIR}/thirdparties/partio/build/src/lib/libpartio.so
 		${CMAKE_DL_LIBS}
 		pthread)
 

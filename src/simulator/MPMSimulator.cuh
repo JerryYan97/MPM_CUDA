@@ -54,8 +54,6 @@ private:
 
     double dt;
     double ext_gravity;
-    double current_time;
-    int current_frame;
 
     double min_bound_x;
     double min_bound_y;
@@ -71,6 +69,9 @@ private:
 
 public:
     double t;
+    double current_time;
+    int current_frame;
+
     ParticleGroup mParticles{};
     Grid mGrid{};
     MPMSimulator(double gap,
