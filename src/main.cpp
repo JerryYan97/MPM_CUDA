@@ -123,16 +123,20 @@ int main() {
     graphicsPipeline mPipline(vPath,fPath);
     mPipline.cullBackFace();
 
+    std::string vBoundaryPath = std::string(PROJ_PATH) + "/src/shaders/lineDraw.vert";
+    std::string fBoundaryPath = std::string(PROJ_PATH) + "/src/shaders/lineDraw.frag";
+    graphicsPipeline mBoundaryPipeline(vBoundaryPath, fBoundaryPath);
+
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    std::string obj_path = std::string(PROJ_PATH) + "/models/cube.obj";
-    std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
+    std::string obj1_path = std::string(PROJ_PATH) + "/models/cube.obj";
+    std::string obj2_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
     // model mModel(obj_path);
-    MPMSimulator mSim(0.1f, 1.0/5000.0, 300, 10, obj_path, obj_path);
-    // MPMSimulator mSim(0.1f, 1.0/24.0, 200, 8, obj_path);
+    // MPMSimulator mSim(0.05f, 1.0/8000.0, 200, 10, obj1_path, obj2_path);
+    MPMSimulator mSim(0.05f, 1.0/5000.0, 200, 10, obj1_path);
 
     // Jello cube collides case:
-
+    /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         if (i < mSim.mParticles.particleNum / 2){
@@ -142,6 +146,24 @@ int main() {
         }
     }
     mSim.setVel(initVel);
+    */
+
+    // Jello cube collides cylinder case:
+    /*
+    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
+    for (int i = 0; i < mSim.mParticles.particleNumDiv[0]; ++i) {
+        initVel[3 * i + 1] = -6.0;
+    }
+    mSim.setVel(initVel);
+    */
+
+    // Jello cube collides boundary wall
+    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
+    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
+        initVel[3 * i] = -8.0;
+    }
+    mSim.setVel(initVel);
+
 
     /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
@@ -151,10 +173,19 @@ int main() {
     mSim.setVel(initVel);
     */
 
-
+    // Init models
+    std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
     std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
                               mSim.mParticles.particlePosVec.end()};
     InstanceModel mModel(instance_obj_path, insPos, 0.01f);
+
+    float upperCorner[3] = {
+            static_cast<float>(mSim.mGrid.originCorner[0] + mSim.mGrid.h * mSim.mGrid.nodeNumDim),
+            static_cast<float>(mSim.mGrid.originCorner[1] + mSim.mGrid.h * mSim.mGrid.nodeNumDim),
+            static_cast<float>(mSim.mGrid.originCorner[2] + mSim.mGrid.h * mSim.mGrid.nodeNumDim)
+    };
+    model mBoundaryModel(reinterpret_cast<const float *>(mSim.mGrid.originCorner.data()), upperCorner);
+    mBoundaryModel.transLinesGRAM();
 
     mPipline.setMat3("normalMat", mModel.mNormalMat);
     mPipline.setMat4("model", mModel.mModelMat);
@@ -163,6 +194,10 @@ int main() {
     mPipline.setVec3("lightColor", lightColor);
     std::array<float, 3> objColor{0.1f, 0.1f, 0.9f};
     mPipline.setVec3("objColor", objColor);
+
+    std::array<float, 3> bColor{1.0, 0.0, 0.0};
+    mBoundaryPipeline.setVec3("color", bColor);
+    mBoundaryPipeline.setMat4("proj", mCam.mProjMat);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -244,9 +279,12 @@ int main() {
         std::array<float, 3> camPos{mCam.mPos[0], mCam.mPos[1], mCam.mPos[2]};
         mPipline.setVec3("camPos", camPos);
 
+        mBoundaryPipeline.setMat4("view", mCam.mViewMat);
+
         // Render
         ImGui::Render();
         mPipline.renderInstance(mModel);
+        mBoundaryPipeline.renderLines(mBoundaryModel);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         // Swap buffers
         glfwSwapBuffers(window);

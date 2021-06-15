@@ -160,8 +160,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     // Init info.
     this->dt = dt;
     t = 0.0;
-    ext_gravity = 0.0;
-    FixedCorotatedMaterial mMaterial(0.01e9, 0.49, 1.1);
+    ext_gravity = -9.8;
+    FixedCorotatedMaterial mMaterial(1e3, 0.2, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial);
     current_frame = 0;
     current_time = 0.0;
@@ -172,8 +172,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel(sampleModelPath, 1.f, false);
     mModel.setTransformation(glm::vec3(1.f),
-                             glm::vec3(5.f, 5.f, 5.f),
-                             0.f,
+                             glm::vec3(5.f, 4.f, 5.f),
+                             35.f,
                              glm::vec3(1.f, 0.f, 0.f));
 
     // Check the obj bounding box is within the grid.
@@ -196,8 +196,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     int upper_z_idx = int(mModel.mUpperBound[2] / gap);
 
     // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ = construct_mesh_object(mModel.mQMVertData.size() / 3,
-                                              mModel.mQMVertData.data(),
+    MeshObject* mMOBJ = construct_mesh_object(mModel.mQmVertData.size() / 3,
+                                              mModel.mQmVertData.data(),
                                               mModel.mQMIndData.size() / 3,
                                               mModel.mQMIndData.data());
 
@@ -251,7 +251,7 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     // Init info.
     this->dt = dt;
     t = 0.0;
-    ext_gravity = 0.0;
+    ext_gravity = -9.8;
     FixedCorotatedMaterial mMaterial1(1e3, 0.2, 1.1);
     FixedCorotatedMaterial mMaterial2(1e3, 0.2, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial1);
@@ -265,14 +265,14 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel1(sampleModelPath1, 1.f, false);
     mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(6.0f, 5.f, 5.f),
-                              0.f,
-                              glm::vec3(1.f, 0.f, 0.f));
-    model mModel2(sampleModelPath1, 1.f, false);
+                              glm::vec3(5.0f, 4.f, 5.f),
+                              35.f,
+                              glm::normalize(glm::vec3(1.f, 0.5f, -1.5f)));
+    model mModel2(sampleModelPath2, 1.f, false);
     mModel2.setTransformation(glm::vec3(1.f),
-                              glm::vec3(3.0f, 5.f, 5.f),
+                              glm::vec3(5.0f, 1.f, 5.f),
                               0.f,
-                              glm::vec3(1.f, 0.f, 0.f));
+                              glm::normalize(glm::vec3(1.f, 0.f, 0.f)));
 
     // Check the obj bounding box is within the grid.
     float gridUpperBound = (nodeNumDim - 1) * gap;
@@ -301,8 +301,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     int upper1_z_idx = int(mModel1.mUpperBound[2] / gap);
 
     // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ1 = construct_mesh_object(mModel1.mQMVertData.size() / 3,
-                                              mModel1.mQMVertData.data(),
+    MeshObject* mMOBJ1 = construct_mesh_object(mModel1.mQmVertData.size() / 3,
+                                              mModel1.mQmVertData.data(),
                                               mModel1.mQMIndData.size() / 3,
                                               mModel1.mQMIndData.data());
 
@@ -351,8 +351,8 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     int upper2_z_idx = int(mModel2.mUpperBound[2] / gap);
 
     // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ2 = construct_mesh_object(mModel2.mQMVertData.size() / 3,
-                                               mModel2.mQMVertData.data(),
+    MeshObject* mMOBJ2 = construct_mesh_object(mModel2.mQmVertData.size() / 3,
+                                               mModel2.mQmVertData.data(),
                                                mModel2.mQMIndData.size() / 3,
                                                mModel2.mQMIndData.data());
 
@@ -483,5 +483,12 @@ void MPMSimulator::setVel(std::vector<double> &particleVelVec) {
 }
 
 double MPMSimulator::calVolmue(std::string &place) {
-    return 2.0 * 2.0 *  2.0; // For cube
+    std::string cube_path = std::string(PROJ_PATH) + "/models/cube.obj";
+    std::string cylinder_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
+    if (place == cube_path){
+        return 2.0 * 2.0 *  2.0; // For cube
+    }
+    if (place == cylinder_path){
+        return 3.1415926 * 4.0;
+    }
 }

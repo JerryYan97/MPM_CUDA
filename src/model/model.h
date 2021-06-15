@@ -11,25 +11,29 @@
 #include <gtc/matrix_transform.hpp>
 class model {
 protected:
-    bool mUseInGL;
+    bool mUseInGL{};
 public:
     unsigned int VBO{}, EBO{}, VAO{};
-    glm::mat4 mModelMat;
-    glm::mat3 mNormalMat;
+    glm::mat4 mModelMat{};
+    glm::mat3 mNormalMat{};
 
     std::vector<float> mGLVertData;
     std::vector<unsigned int> mGLIndices;
     std::vector<int> mQMIndData; // Query mesh indices: For MPM sampling.
-    std::vector<double> mQMVertData;
+    std::vector<double> mQmVertData;
     std::vector<unsigned int> mVertLength; // Support multiple models.
 
-    glm::vec3 mUpperBound;
-    glm::vec3 mLowerBound;
+    glm::vec3 mUpperBound{}; // Upper bound in the world space.
+    glm::vec3 mLowerBound{}; // Lower bound in the world space.
 
-    explicit model(std::string &path, float modelSize, bool usedGL);
-    void transGRAM();
+    explicit model(std::string &path, float modelSize, bool usedGL); // For normal mesh;
+    model(const float * lowerBound, const float * upperBound); // For boundary lines;
+
+    void transGRAM(); // For normal mesh;
+    void transLinesGRAM(); // For boundary lines;
+
     void setTransformation(glm::vec3 scale, glm::vec3 translation, float rotateDegree, glm::vec3 rotateAxis);
-    int mVertNum;
+    int mVertNum{}; // NOTE: This is the number of vertices for OpenGL data format instead of distinctive points' number in this model.
     ~model();
 };
 

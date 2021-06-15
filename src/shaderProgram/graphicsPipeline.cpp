@@ -116,3 +116,9 @@ void graphicsPipeline::renderInstance(InstanceModel& renderedModel) {
 void graphicsPipeline::cullBackFace() {
     glEnable(GL_CULL_FACE);
 }
+
+void graphicsPipeline::renderLines(model &renderedModel) {
+    this->use();
+    glBindVertexArray(renderedModel.VAO);
+    glDrawElements(GL_LINES, renderedModel.mGLIndices.size(), GL_UNSIGNED_INT, 0);
+}

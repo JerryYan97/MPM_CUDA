@@ -10,82 +10,6 @@
 #include "../../thirdparties/cudaSVD/svd3_cuda.h"
 
 template<class T>
-__device__ void Times_Rotated_dP_dF_FixedCorotated(const T mu, const T lambda, const T* F, const T* dF, T* dP) {
-
-    T U[9]; T S[3]; T V[9];
-    svd(F[0],F[3],F[6],F[1],F[4],F[7],F[2],F[5],F[8], U[0],U[3],U[6],U[1],U[4],U[7],U[2],U[5],U[8], S[0],S[1],S[2], V[0],V[3],V[6],V[1],V[4],V[7],V[2],V[5],V[8]);
-
-    //
-    T J=S[0]*S[1]*S[2]; T scaled_mu=2.f*mu; T scaled_lambda=lambda*(J-1.f);
-    T P_hat[3]; P_hat[0]=scaled_mu*(S[0]-1.f)+scaled_lambda*(S[1]*S[2]); P_hat[1]=scaled_mu*(S[1]-1.f)+scaled_lambda*(S[0]*S[2]); P_hat[2]=scaled_mu*(S[2]-1.f)+scaled_lambda*(S[0]*S[1]);
-
-    T dP_hat_dSigma_upper[6]; scaled_lambda=lambda*(2.f*J-1.f)*J;
-    for(int i=0;i<3;++i) dP_hat_dSigma_upper[i]=scaled_mu+lambda*J*J/(S[i]*S[i]);
-    dP_hat_dSigma_upper[3]=scaled_lambda/(S[0]*S[1]); dP_hat_dSigma_upper[4]=scaled_lambda/(S[0]*S[2]); dP_hat_dSigma_upper[5]=scaled_lambda/(S[1]*S[2]);
-
-    scaled_lambda=-lambda*(J-1.f)*J;
-    T M[3]; M[0]=0.5f*(2.f*mu+scaled_lambda/(S[0]*S[1])); M[1]=0.5f*(2.f*mu+scaled_lambda/(S[0]*S[2])); M[2]=0.5f*(2.f*mu+scaled_lambda/(S[1]*S[2]));
-    //
-
-    T P[3];
-    P[0]=0.5*(P_hat[0]+P_hat[1])/Clamp_Small_Magnitude(S[0]+S[1]);
-    P[1]=0.5*(P_hat[0]+P_hat[2])/Clamp_Small_Magnitude(S[0]+S[2]);
-    P[2]=0.5*(P_hat[1]+P_hat[2])/Clamp_Small_Magnitude(S[1]+S[2]);
-
-    T dF_hat[9];
-    dF_hat[0]=(dF[0] * U[0] + dF[1] * U[1] + dF[2] * U[2]) * V[0] + (dF[3] * U[0] + dF[4] * U[1] + dF[5] * U[2]) * V[1] + (dF[6] * U[0] + dF[7] * U[1] + dF[8] * U[2]) * V[2];
-    dF_hat[1]=(dF[0] * U[3] + dF[1] * U[4] + dF[2] * U[5]) * V[0] + (dF[3] * U[3] + dF[4] * U[4] + dF[5] * U[5]) * V[1] + (dF[6] * U[3] + dF[7] * U[4] + dF[8] * U[5]) * V[2];
-    dF_hat[2]=(dF[0] * U[6] + dF[1] * U[7] + dF[2] * U[8]) * V[0] + (dF[3] * U[6] + dF[4] * U[7] + dF[5] * U[8]) * V[1] + (dF[6] * U[6] + dF[7] * U[7] + dF[8] * U[8]) * V[2];
-    dF_hat[3]=(dF[0] * U[0] + dF[1] * U[1] + dF[2] * U[2]) * V[3] + (dF[3] * U[0] + dF[4] * U[1] + dF[5] * U[2]) * V[4] + (dF[6] * U[0] + dF[7] * U[1] + dF[8] * U[2]) * V[5];
-    dF_hat[4]=(dF[0] * U[3] + dF[1] * U[4] + dF[2] * U[5]) * V[3] + (dF[3] * U[3] + dF[4] * U[4] + dF[5] * U[5]) * V[4] + (dF[6] * U[3] + dF[7] * U[4] + dF[8] * U[5]) * V[5];
-    dF_hat[5]=(dF[0] * U[6] + dF[1] * U[7] + dF[2] * U[8]) * V[3] + (dF[3] * U[6] + dF[4] * U[7] + dF[5] * U[8]) * V[4] + (dF[6] * U[6] + dF[7] * U[7] + dF[8] * U[8]) * V[5];
-    dF_hat[6]=(dF[0] * U[0] + dF[1] * U[1] + dF[2] * U[2]) * V[6] + (dF[3] * U[0] + dF[4] * U[1] + dF[5] * U[2]) * V[7] + (dF[6] * U[0] + dF[7] * U[1] + dF[8] * U[2]) * V[8];
-    dF_hat[7]=(dF[0] * U[3] + dF[1] * U[4] + dF[2] * U[5]) * V[6] + (dF[3] * U[3] + dF[4] * U[4] + dF[5] * U[5]) * V[7] + (dF[6] * U[3] + dF[7] * U[4] + dF[8] * U[5]) * V[8];
-    dF_hat[8]=(dF[0] * U[6] + dF[1] * U[7] + dF[2] * U[8]) * V[6] + (dF[3] * U[6] + dF[4] * U[7] + dF[5] * U[8]) * V[7] + (dF[6] * U[6] + dF[7] * U[7] + dF[8] * U[8]) * V[8];
-
-    T dP_hat[9];
-    dP_hat[0] = dP_hat_dSigma_upper[0] * dF_hat[0] + dP_hat_dSigma_upper[3] * dF_hat[4] + dP_hat_dSigma_upper[4] * dF_hat[8];
-    dP_hat[4] = dP_hat_dSigma_upper[3] * dF_hat[0] + dP_hat_dSigma_upper[1] * dF_hat[4] + dP_hat_dSigma_upper[5] * dF_hat[8];
-    dP_hat[8] = dP_hat_dSigma_upper[4] * dF_hat[0] + dP_hat_dSigma_upper[5] * dF_hat[4] + dP_hat_dSigma_upper[2] * dF_hat[8];
-    dP_hat[3] = ((M[0] + P[0]) * dF_hat[3] + (M[0] - P[0]) * dF_hat[1]) ;
-    dP_hat[1] = ((M[0] - P[0]) * dF_hat[3] + (M[0] + P[0]) * dF_hat[1]) ;
-    dP_hat[6] = ((M[1] + P[1]) * dF_hat[6] + (M[1] - P[1]) * dF_hat[2]) ;
-    dP_hat[2] = ((M[1] - P[1]) * dF_hat[6] + (M[1] + P[1]) * dF_hat[2]) ;
-    dP_hat[7] = ((M[2] + P[2]) * dF_hat[7] + (M[2] - P[2]) * dF_hat[5]) ;
-    dP_hat[5] = ((M[2] - P[2]) * dF_hat[7] + (M[2] + P[2]) * dF_hat[5]) ;
-
-    dP[0]=(dP_hat[0] * U[0] + dP_hat[1] * U[3] + dP_hat[2] * U[6]) * V[0] + (dP_hat[3] * U[0] + dP_hat[4] * U[3] + dP_hat[5] * U[6]) * V[3] + (dP_hat[6] * U[0] + dP_hat[7] * U[3] + dP_hat[8] * U[6]) * V[6];
-    dP[1]=(dP_hat[0] * U[1] + dP_hat[1] * U[4] + dP_hat[2] * U[7]) * V[0] + (dP_hat[3] * U[1] + dP_hat[4] * U[4] + dP_hat[5] * U[7]) * V[3] + (dP_hat[6] * U[1] + dP_hat[7] * U[4] + dP_hat[8] * U[7]) * V[6];
-    dP[2]=(dP_hat[0] * U[2] + dP_hat[1] * U[5] + dP_hat[2] * U[8]) * V[0] + (dP_hat[3] * U[2] + dP_hat[4] * U[5] + dP_hat[5] * U[8]) * V[3] + (dP_hat[6] * U[2] + dP_hat[7] * U[5] + dP_hat[8] * U[8]) * V[6];
-    dP[3]=(dP_hat[0] * U[0] + dP_hat[1] * U[3] + dP_hat[2] * U[6]) * V[1] + (dP_hat[3] * U[0] + dP_hat[4] * U[3] + dP_hat[5] * U[6]) * V[4] + (dP_hat[6] * U[0] + dP_hat[7] * U[3] + dP_hat[8] * U[6]) * V[7];
-    dP[4]=(dP_hat[0] * U[1] + dP_hat[1] * U[4] + dP_hat[2] * U[7]) * V[1] + (dP_hat[3] * U[1] + dP_hat[4] * U[4] + dP_hat[5] * U[7]) * V[4] + (dP_hat[6] * U[1] + dP_hat[7] * U[4] + dP_hat[8] * U[7]) * V[7];
-    dP[5]=(dP_hat[0] * U[2] + dP_hat[1] * U[5] + dP_hat[2] * U[8]) * V[1] + (dP_hat[3] * U[2] + dP_hat[4] * U[5] + dP_hat[5] * U[8]) * V[4] + (dP_hat[6] * U[2] + dP_hat[7] * U[5] + dP_hat[8] * U[8]) * V[7];
-    dP[6]=(dP_hat[0] * U[0] + dP_hat[1] * U[3] + dP_hat[2] * U[6]) * V[2] + (dP_hat[3] * U[0] + dP_hat[4] * U[3] + dP_hat[5] * U[6]) * V[5] + (dP_hat[6] * U[0] + dP_hat[7] * U[3] + dP_hat[8] * U[6]) * V[8];
-    dP[7]=(dP_hat[0] * U[1] + dP_hat[1] * U[4] + dP_hat[2] * U[7]) * V[2] + (dP_hat[3] * U[1] + dP_hat[4] * U[4] + dP_hat[5] * U[7]) * V[5] + (dP_hat[6] * U[1] + dP_hat[7] * U[4] + dP_hat[8] * U[7]) * V[8];
-    dP[8]=(dP_hat[0] * U[2] + dP_hat[1] * U[5] + dP_hat[2] * U[8]) * V[2] + (dP_hat[3] * U[2] + dP_hat[4] * U[5] + dP_hat[5] * U[8]) * V[5] + (dP_hat[6] * U[2] + dP_hat[7] * U[5] + dP_hat[8] * U[8]) * V[8];
-}
-
-/* Old Determinant
-template<class T>
-__forceinline__
-__device__ T matrixDeterminant(const T* x) {
-    return x[0]*(x[4]*x[8]-x[7]*x[5])+x[3]*(x[7]*x[2]-x[1]*x[8])+x[6]*(x[1]*x[5]-x[4]*x[2]);
-}
-*/
-
-/*
-@ti.func
-        def cofactor(F):
-if ti.static(F.n == 2):
-return ti.Matrix([[F[1, 1], -F[1, 0]], [-F[0, 1], F[0, 0]]])
-else:
-return ti.Matrix(
- [[F[1, 1] * F[2, 2] - F[1, 2] * F[2, 1], F[1, 2] * F[2, 0] - F[1, 0] * F[2, 2], F[1, 0] * F[2, 1] - F[1, 1] * F[2, 0]],
-[F[0, 2] * F[2, 1] - F[0, 1] * F[2, 2], F[0, 0] * F[2, 2] - F[0, 2] * F[2, 0], F[0, 1] * F[2, 0] - F[0, 0] * F[2, 1]],
-[F[0, 1] * F[1, 2] - F[0, 2] * F[1, 1], F[0, 2] * F[1, 0] - F[0, 0] * F[1, 2], F[0, 0] * F[1, 1] - F[0, 1] * F[1, 0]]])
-*/
-
-template<class T>
 __device__ void Mat3x3Cofactor(const T* F, T* res){
     res[0] = F[4] * F[8] - F[5] * F[7];
     res[1] = F[5] * F[6] - F[3] * F[8];
@@ -98,30 +22,11 @@ __device__ void Mat3x3Cofactor(const T* F, T* res){
     res[8] = F[0] * F[4] - F[1] * F[3];
 }
 
-
-
 template<class T>
 __forceinline__
 __device__ T Mat3x3Determinant(const T* X){
     return X[0] * (X[4] * X[8] - X[5] * X[7]) + X[1] * (X[3] * X[8] - X[5] * X[6]) + X[2] * (X[3] * X[7] - X[4] * X[6]);
 }
-
-/* GPU-MPM column major matrix multiplication.
-template<class T>
-__forceinline__
-__device__ void MatMul(const T* a, const T* b, T* c)
-{
-    c[0]=a[0]*b[0]+a[3]*b[1]+a[6]*b[2];
-    c[1]=a[1]*b[0]+a[4]*b[1]+a[7]*b[2];
-    c[2]=a[2]*b[0]+a[5]*b[1]+a[8]*b[2];
-    c[3]=a[0]*b[3]+a[3]*b[4]+a[6]*b[5];
-    c[4]=a[1]*b[3]+a[4]*b[4]+a[7]*b[5];
-    c[5]=a[2]*b[3]+a[5]*b[4]+a[8]*b[5];
-    c[6]=a[0]*b[6]+a[3]*b[7]+a[6]*b[8];
-    c[7]=a[1]*b[6]+a[4]*b[7]+a[7]*b[8];
-    c[8]=a[2]*b[6]+a[5]*b[7]+a[8]*b[8];
-}
-*/
 
 template<class T>
 __forceinline__
@@ -136,7 +41,6 @@ __device__ void MatMul3x3(const T* A, const T* B, T* C){
     C[7] = A[6] * B[1] + A[7] * B[4] + A[8] * B[7];
     C[8] = A[6] * B[2] + A[7] * B[5] + A[8] * B[8];
 }
-
 
 template<class T>
 __forceinline__
@@ -214,10 +118,11 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
     assert(S22 > 0.f || abs(S22) <= 1e-6);
     assert(S11 > S22 || abs(S11 - S22) <= 1e-6);
     assert(S22 > abs(S33) || abs(S22 - abs(S33)) < 1e-6);
+    */
 
     assert(Mat3x3Determinant(U) >= 0.f);
     assert(Mat3x3Determinant(V) >= 0.f);
-    */
+
 
 
     float P_sigma[9] = {dig1, 0.f, 0.f,
@@ -240,55 +145,12 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
     P33 = res[8];
 }
 
-/*
-__device__ void MatTranspose(const double* m, double* res, const int mRowNum, const int mColNum){
-    for (int mRowIdx = 0; mRowIdx < mRowNum; ++mRowIdx){
-        for (int mColIdx = 0; mColIdx < mColNum; ++mColIdx){
-            int mIdx = mRowIdx * mColNum + mColIdx;
-            int resIdx = mColIdx * mRowNum + mRowIdx;
-            res[resIdx] = m[mIdx];
-        }
-    }
-}
-*/
-
 template<class T>
 __device__ void MatAdd(const T* m1, const T* m2, T* mAdd, int eleNum){
     for (int i = 0; i < eleNum; ++i){
         mAdd[i] = m1[i] + m2[i];
     }
 }
-
-/*
-__device__ void MatMul(const double* m1, const double* m2, double* mMul,
-                       int m1RowNum, int m1ColNum, int m2RowNum, int m2ColNum){
-    assert(m1ColNum == m2RowNum);
-    // The dot product between the m1_row_idx of the m1 row and the m2_col_idx of the m2 col.
-    for (int m1_row_idx = 0; m1_row_idx < m1RowNum; ++m1_row_idx){
-        for (int m2_col_idx = 0; m2_col_idx < m2ColNum; ++m2_col_idx){
-            double res = 0.0;
-            for (int m1_col_idx = 0; m1_col_idx < m1ColNum; ++m1_col_idx){
-                int m1_idx = m1_row_idx * m1ColNum + m1_col_idx;
-                int m2_idx = m1_col_idx * m2ColNum + m2_col_idx;
-                res += (m1[m1_idx] * m2[m2_idx]);
-            }
-            int mIdx = m1_row_idx * m2ColNum + m2_col_idx;
-            mMul[mIdx] = res;
-        }
-    }
-}
-*/
-
-/* Old column-major matrix
-template<class T>
-__forceinline__
-__device__ __host__ void matrixVectorMultiplication(const T* x, const T* v, T* result)
-{
-    result[0]=x[0]*v[0]+x[3]*v[1]+x[6]*v[2];
-    result[1]=x[1]*v[0]+x[4]*v[1]+x[7]*v[2];
-    result[2]=x[2]*v[0]+x[5]*v[1]+x[8]*v[2];
-}
-*/
 
 template<class T>
 __forceinline__
@@ -558,6 +420,10 @@ __global__ void P2G(unsigned int pNum,
 }
 
 __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
+                          double lower_x, double lower_y, double lower_z,
+                          double upper_x, double upper_y, double upper_z,
+                          double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
+                          unsigned int gNodeNumDim, double h,
                           double* gMassVec, double* gVelMotVec, double* gForceVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < gNum){
@@ -576,12 +442,29 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             gVelMotVec[3 * i] = gVelMotVec[3 * i] / mass;
             gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] / mass;
             gVelMotVec[3 * i + 2] = gVelMotVec[3 * i + 2] / mass;
+
             // Include gravity into velocity.
             gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] + ext_gravity * dt;
+
             // Include elasticity force into velocity.
             gVelMotVec[3 * i] += (dt * gForceVec[3 * i] / mass);
             gVelMotVec[3 * i + 1] += (dt * gForceVec[3 * i + 1] / mass);
             gVelMotVec[3 * i + 2] += (dt * gForceVec[3 * i + 2] / mass);
+
+            // Deal with Boundary condition.
+            int idx_x = i % int(gNodeNumDim);
+            int idx_y = ((i - idx_x) / int(gNodeNumDim)) % int(gNodeNumDim);
+            int idx_z = ((i - idx_x) / int(gNodeNumDim) - idx_y) / int(gNodeNumDim);
+            double grid_node_pos[3] = {gOriCorner_x + idx_x * h,
+                                       gOriCorner_y + idx_y * h,
+                                       gOriCorner_z + idx_z * h};
+            if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x ||
+                grid_node_pos[1] <= lower_y || grid_node_pos[1] >= upper_y ||
+                grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z){
+                gVelMotVec[3 * i] = 0.0;
+                gVelMotVec[3 * i + 1] = 0.0;
+                gVelMotVec[3 * i + 2] = 0.0;
+            }
         }
     }
 }
@@ -925,6 +808,14 @@ void MPMSimulator::step() {
     int gThreadsPerBlock = 256;
     int gBlocksPerGrid = (gNum + gThreadsPerBlock - 1) / gThreadsPerBlock;
     VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, dt, ext_gravity,
+                                                    mGrid.originCorner[0] + 10 * mGrid.h,
+                                                    mGrid.originCorner[1] + 10 * mGrid.h,
+                                                    mGrid.originCorner[2] + 10 * mGrid.h,
+                                                    mGrid.originCorner[0] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
+                                                    mGrid.originCorner[1] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
+                                                    mGrid.originCorner[2] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
+                                                    mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
+                                                    mGrid.nodeNumDim, mGrid.h,
                                                     mGrid.nodeMassVec, mGrid.nodeVelVec, mGrid.nodeForceVec);
     cudaDeviceSynchronize();
     err = cudaGetLastError();
