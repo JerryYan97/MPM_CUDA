@@ -22,7 +22,7 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
                       mParticles.particleVolVec.begin() + mParticles.particleNumDiv[0],
                       pVol);
             std::fill(mParticles.particleMassVec.begin(),
-                      mParticles.particleMassVec.end() + mParticles.particleNumDiv[0],
+                      mParticles.particleMassVec.begin() + mParticles.particleNumDiv[0],
                       pVol * mParticles.mMaterialVec[i].mDensity);
         }
         else{
@@ -34,7 +34,7 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
                       mParticles.particleVolVec.begin() + beginOffset + mParticles.particleNumDiv[i],
                       pVol);
             std::fill(mParticles.particleMassVec.begin() + beginOffset,
-                      mParticles.particleMassVec.end() + beginOffset + mParticles.particleNumDiv[i],
+                      mParticles.particleMassVec.begin() + beginOffset + mParticles.particleNumDiv[i],
                       pVol * mParticles.mMaterialVec[i].mDensity);
         }
     }
@@ -51,6 +51,8 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
     mParticles.velVecByteSize = mParticles.particleNum * 3 * sizeof(double);
     mParticles.volVecByteSize = mParticles.particleNum * sizeof(double);
     mParticles.dgVecByteSize = mParticles.particleNum * 9 * sizeof(double); // 11, 12, 13, 21, 22, 23, 31, 32, 33.
+    mParticles.affineVelVecByteSize = mParticles.particleNum * 9 * sizeof(double);
+    mParticles.dgDiffVecByteSize = mParticles.particleNum * sizeof(double);
 
     err = cudaMalloc((void **)&mParticles.pPosVecGRAM, mParticles.posVecByteSize);
     if (err != cudaSuccess){
@@ -111,6 +113,30 @@ void MPMSimulator::initParticles(std::vector<double> &volVec) {
         std::cerr << "Init deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
+
+    err = cudaMalloc((void **)&mParticles.pAffineVelGRAM, mParticles.affineVelVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Allocate particles affine velocity matrix error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+    err = cudaMemset(mParticles.pAffineVelGRAM, 0, mParticles.affineVelVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Set particles affine velocity matrix error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+
+    err = cudaMalloc((void **)&mParticles.pDeformationGradientDiffGRAM, mParticles.dgDiffVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Allocate particles deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+    err = cudaMemset(mParticles.pDeformationGradientDiffGRAM, 0, mParticles.dgDiffVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Set particles deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+
+
 }
 
 
@@ -155,11 +181,11 @@ void MPMSimulator::showMemUsage() {
 }
 
 
-MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
+MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
                            std::string &sampleModelPath) {
     // Init info.
-    this->dt = dt;
-    t = 0.0;
+    this->max_dt = max_dt;
+    this->adp_dt = max_dt;
     ext_gravity = -9.8;
     FixedCorotatedMaterial mMaterial(1e3, 0.2, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial);
@@ -246,14 +272,14 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
 }
 
 
-MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
+MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
                            std::string &sampleModelPath1, std::string &sampleModelPath2) {
     // Init info.
-    this->dt = dt;
-    t = 0.0;
+    this->max_dt = max_dt;
+    this->adp_dt = max_dt;
     ext_gravity = -9.8;
-    FixedCorotatedMaterial mMaterial1(1e3, 0.2, 1.1);
-    FixedCorotatedMaterial mMaterial2(1e3, 0.2, 1.1);
+    FixedCorotatedMaterial mMaterial1(1e4, 0.4, 1.1);
+    FixedCorotatedMaterial mMaterial2(1e4, 0.4, 1.1);
     mParticles.mMaterialVec.push_back(mMaterial1);
     mParticles.mMaterialVec.push_back(mMaterial2);
     current_frame = 0;
@@ -265,12 +291,12 @@ MPMSimulator::MPMSimulator(double gap, double dt, unsigned int nodeNumDim, unsig
     cudaError_t err = cudaSuccess;
     model mModel1(sampleModelPath1, 1.f, false);
     mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(5.0f, 4.f, 5.f),
+                              glm::vec3(12.0f, 6.5f, 5.f),
                               35.f,
                               glm::normalize(glm::vec3(1.f, 0.5f, -1.5f)));
     model mModel2(sampleModelPath2, 1.f, false);
-    mModel2.setTransformation(glm::vec3(1.f),
-                              glm::vec3(5.0f, 1.f, 5.f),
+    mModel2.setTransformation(glm::vec3(1.f, 2.f, 1.f),
+                              glm::vec3(13.0f, 2.1f, 6.f),
                               0.f,
                               glm::normalize(glm::vec3(1.f, 0.f, 0.f)));
 
@@ -467,6 +493,18 @@ MPMSimulator::~MPMSimulator() {
     err = cudaFree(mParticles.pVolVecGRAM);
     if (err != cudaSuccess){
         std::cerr << "Free particle volume error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+
+    err = cudaFree(mParticles.pAffineVelGRAM);
+    if (err != cudaSuccess){
+        std::cerr << "Free particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+
+    err = cudaFree(mParticles.pDeformationGradientDiffGRAM);
+    if (err != cudaSuccess){
+        std::cerr << "Free particle deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 }

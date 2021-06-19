@@ -25,7 +25,7 @@ float lastY = height / 2.0f;
 bool firstMouse = true;
 bool process = false;
 int outputFrameID = 0;
-int frameRate = 24;
+int frameRate = 36;
 float timePerFrame = 1.f / float(frameRate);
 
 Camera mCam(width, height);
@@ -105,7 +105,7 @@ int main() {
         return -1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    glfwSwapInterval(0);
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
@@ -132,8 +132,8 @@ int main() {
     std::string obj1_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string obj2_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
     // model mModel(obj_path);
-    // MPMSimulator mSim(0.05f, 1.0/8000.0, 200, 10, obj1_path, obj2_path);
-    MPMSimulator mSim(0.05f, 1.0/5000.0, 200, 10, obj1_path);
+    // MPMSimulator mSim(0.1f, 1.0/10000.0, 200, 10, obj1_path, obj2_path);
+    MPMSimulator mSim(0.1f, 1.0/5000.0, 200, 10, obj1_path);
 
     // Jello cube collides case:
     /*
@@ -149,21 +149,24 @@ int main() {
     */
 
     // Jello cube collides cylinder case:
-    /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
-    for (int i = 0; i < mSim.mParticles.particleNumDiv[0]; ++i) {
-        initVel[3 * i + 1] = -6.0;
+    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
+        if (i < mSim.mParticles.particleNumDiv[0]){
+            initVel[3 * i + 1] = -6.0;
+        }else{
+            initVel[3 * i + 1] = -1.0;
+        }
     }
     mSim.setVel(initVel);
-    */
 
     // Jello cube collides boundary wall
+    /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         initVel[3 * i] = -8.0;
     }
     mSim.setVel(initVel);
-
+    */
 
     /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
@@ -212,7 +215,7 @@ int main() {
     ImGui_ImplOpenGL3_Init("#version 150");
 
     float counter = 0.0;
-    while (!glfwWindowShouldClose(window)){
+    while (!glfwWindowShouldClose(window) && mSim.current_time <= 20.0){
         glfwPollEvents();
         // processMovementInput(window);
         process = true;
@@ -265,6 +268,10 @@ int main() {
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate,
                         ImGui::GetIO().Framerate);
+
+            ImGui::Text("Already Output Frames: %d. Current Sim time: %.2f (s)", outputFrameID, mSim.current_time);
+            ImGui::Text("Last time step: %.10f", mSim.adp_dt);
+
             ImGui::End();
         }
 

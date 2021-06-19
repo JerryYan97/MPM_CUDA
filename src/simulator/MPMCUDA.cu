@@ -25,7 +25,7 @@ __device__ void Mat3x3Cofactor(const T* F, T* res){
 template<class T>
 __forceinline__
 __device__ T Mat3x3Determinant(const T* X){
-    return X[0] * (X[4] * X[8] - X[5] * X[7]) + X[1] * (X[3] * X[8] - X[5] * X[6]) + X[2] * (X[3] * X[7] - X[4] * X[6]);
+    return X[0] * (X[4] * X[8] - X[5] * X[7]) - X[1] * (X[3] * X[8] - X[5] * X[6]) + X[2] * (X[3] * X[7] - X[4] * X[6]);
 }
 
 template<class T>
@@ -70,41 +70,10 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
     float S11, S22, S33;
     float dig1, dig2, dig3;
 
-    /*
-    if (abs(F11 - 0.f) < FLT_EPSILON){
-        F11 = 0.f;
-    }
-    if (abs(F12 - 0.f) < FLT_EPSILON){
-        F12 = 0.f;
-    }
-    if (abs(F13 - 0.f) < FLT_EPSILON){
-        F13 = 0.f;
-    }
-    if (abs(F21 - 0.f) < FLT_EPSILON){
-        F21 = 0.f;
-    }
-    if (abs(F22 - 0.f) < FLT_EPSILON){
-        F22 = 0.f;
-    }
-    if (abs(F23 - 0.f) < FLT_EPSILON){
-        F23 = 0.f;
-    }
-    if (abs(F31 - 0.f) < FLT_EPSILON){
-        F31 = 0.f;
-    }
-    if (abs(F32 - 0.f) < FLT_EPSILON){
-        F32 = 0.f;
-    }
-    if (abs(F33 - 0.f) < FLT_EPSILON){
-        F33 = 0.f;
-    }
-    */
-
     svd(F11, F12, F13, F21, F22, F23, F31, F32, F33,
         U11, U12, U13, U21, U22, U23, U31, U32, U33,
         S11, S22, S33,
         V11, V12, V13, V21, V22, V23, V31, V32, V33);
-    FixedCorotatedPStressSigma(S11, S22, S33, mu, lambda, dig1, dig2, dig3);
 
     float V[9] = {V11, V12, V13,
                   V21, V22, V23,
@@ -113,17 +82,24 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
                   U21, U22, U23,
                   U31, U32, U33};
 
-    /*
-    assert(S11 > 0.f || abs(S11) <= 1e-6);
-    assert(S22 > 0.f || abs(S22) <= 1e-6);
-    assert(S11 > S22 || abs(S11 - S22) <= 1e-6);
-    assert(S22 > abs(S33) || abs(S22 - abs(S33)) < 1e-6);
-    */
+    if (Mat3x3Determinant(U) < 0.f){
+        U[2] = -U[2];
+        U[5] = -U[5];
+        U[8] = -U[8];
+        S33 = -S33;
+        // printf("Det(U):%f, S11:%f, S22:%f, S33:%f", Mat3x3Determinant(U), S11, S22, S33);
+        assert(Mat3x3Determinant(U) >= 0.f);
+    }
 
-    assert(Mat3x3Determinant(U) >= 0.f);
-    assert(Mat3x3Determinant(V) >= 0.f);
+    if (Mat3x3Determinant(V) < 0.f){
+        V[2] = -V[2];
+        V[5] = -V[5];
+        V[8] = -V[8];
+        S33 = -S33;
+        assert(Mat3x3Determinant(V) >= 0.f);
+    }
 
-
+    FixedCorotatedPStressSigma(S11, S22, S33, mu, lambda, dig1, dig2, dig3);
 
     float P_sigma[9] = {dig1, 0.f, 0.f,
                         0.f, dig2, 0.f,
@@ -271,8 +247,9 @@ __device__ double BSplineInterpolation(const double xp[3], const double xi[3], c
 
 __global__ void P2G(unsigned int pNum,
                     double* pPosVec, double* pMassVec, double* pVelVec, double* pDGVec,
-                    double* pVolVec, double* pForceVec, // int* pAttentionLabel,
-                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, int* gAttentionIdx,
+                    double* pVolVec, // double* pForceVec,
+                    double* pAffineVelVec,
+                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, // int* gAttentionIdx,
                     unsigned int gNodeNumDim, double h, double mu, double lambda,
                     double* gNodeMassVec, double* gNodeTmpMotVec, double* gElasticityForceVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -283,6 +260,9 @@ __global__ void P2G(unsigned int pNum,
         float tmpDeformationGradient[9] = {float(pDGVec[9 * i]), float(pDGVec[9 * i + 1]), float(pDGVec[9 * i + 2]),
                                            float(pDGVec[9 * i + 3]), float(pDGVec[9 * i + 4]), float(pDGVec[9 * i + 5]),
                                            float(pDGVec[9 * i + 6]), float(pDGVec[9 * i + 7]), float(pDGVec[9 * i + 8])};
+        double tmpAffineVel[9] = {pAffineVelVec[9 * i], pAffineVelVec[9 * i + 1], pAffineVelVec[9 * i + 2],
+                                  pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
+                                  pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8]};
         float stress[9] = {0.f};
         FixedCorotatedPStress(tmpDeformationGradient[0], tmpDeformationGradient[1], tmpDeformationGradient[2],
                               tmpDeformationGradient[3], tmpDeformationGradient[4], tmpDeformationGradient[5],
@@ -291,8 +271,8 @@ __global__ void P2G(unsigned int pNum,
                               stress[0], stress[1], stress[2],
                               stress[3], stress[4], stress[5],
                               stress[6], stress[7], stress[8]);
-        float stress2[9] = {0.f};
-        FixedCorotatedStress2(tmpDeformationGradient, float(mu), float(lambda), stress2);
+        // float stress2[9] = {0.f};
+        // FixedCorotatedStress2(tmpDeformationGradient, float(mu), float(lambda), stress2);
 
         // float tar_stress[9] = {0.0};
         // Times_Rotated_dP_dF_FixedCorotated(float(mu), float(lambda), tmpDeformationGradient, );
@@ -301,7 +281,7 @@ __global__ void P2G(unsigned int pNum,
         MatTranspose(tmpDeformationGradient, F_transpose);
         float tmpMat[9] = {0.f};
         // MatMul3x3(stress, F_transpose, tmpMat);
-        MatMul3x3(stress2, F_transpose, tmpMat);
+        MatMul3x3(stress, F_transpose, tmpMat);
 
         float mVol(pVolVec[i]);
         ScalarMatMul(mVol, tmpMat, tmpMat, 9);
@@ -352,22 +332,41 @@ __global__ void P2G(unsigned int pNum,
                     // printf("b_pos:(%f, %f, %f)\n", b_pos[0], b_pos[1], b_pos[2]);
                     double w = BSplineInterpolation(pos, b_pos, h);
                     int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
+                    if (idx_x >= gNodeNumDim || idx_y >= gNodeNumDim || idx_z >= gNodeNumDim){
+                        printf("Particle ID:%d, idx_z:%d, idx_y:%d, idx_x:%d\n", i, idx_z, idx_y, idx_x);
+                        assert(idx_x < gNodeNumDim);
+                        assert(idx_y < gNodeNumDim);
+                        assert(idx_z < gNodeNumDim);
+                    }
+                    if (g_idx >= gNodeNumDim * gNodeNumDim * gNodeNumDim){
+                        printf("Particle ID:%d, idx_z:%d, idx_y:%d, idx_x:%d", i, idx_z, idx_y, idx_x);
+                    }
                     assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
                     assert(g_idx >= 0);
 
                     atomicAdd(&gNodeMassVec[g_idx], w * m);
                     t_m += w * m;
 
-                    atomicAdd(&gNodeTmpMotVec[3 * g_idx], w * m * vel[0]);
-                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 1], w * m * vel[1]);
-                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], w * m * vel[2]);
+                    double xi_min_xp[3] = {b_pos[0] - pos[0],
+                                           b_pos[1] - pos[1],
+                                           b_pos[2] - pos[2]};
+                    double Cp_xi_xp[3] = {0.0};
+                    MatVelMul3x3x3x1(tmpAffineVel, xi_min_xp, Cp_xi_xp);
+                    double right_term[3] = {vel[0] + Cp_xi_xp[0],
+                                            vel[1] + Cp_xi_xp[1],
+                                            vel[2] + Cp_xi_xp[2]};
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx], w * m * right_term[0]);
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 1], w * m * right_term[1]);
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], w * m * right_term[2]);
                     t_w += w;
 
+                    /*
                     if (i == 1){
                         // printf("P109743 related node Mot(g_idx=%d)=[%f, %f, %f] w=%f.\n", g_idx,
                         //        w * m * vel[0], w * m * vel[1], w * m * vel[2], w);
                         gAttentionIdx[idx_x_offset * 9 + idx_y_offset * 3 + idx_z_offset] = g_idx;
                     }
+                    */
 
                     // Transfer elasticity force to grid.
                     double grad_wip[3] = {0.0};
@@ -400,9 +399,9 @@ __global__ void P2G(unsigned int pNum,
                 }
             }
         }
-        pForceVec[3 * i] = double(t_f_x);
-        pForceVec[3 * i + 1] = double(t_f_y);
-        pForceVec[3 * i + 2] = double(t_f_z);
+        // pForceVec[3 * i] = double(t_f_x);
+        // pForceVec[3 * i + 1] = double(t_f_y);
+        // pForceVec[3 * i + 2] = double(t_f_z);
         /*
         if (abs(t_f_x) > 1.0 || abs(t_f_y) > 1.0 || abs(t_f_z) > 1.0){
             printf("Particle %d contributes force:[%f, %f, %f]\n", i, t_f_x, t_f_y, t_f_z);
@@ -470,11 +469,13 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
 }
 
 __global__ void InterpolateAndMove(unsigned int pNum, double dt,
-                                   double* pPosVec, double* pVelVec, double* pDGVec,
+                                   double* pPosVec, double* pVelVec, double* pDGVec, double* pAffineVelVec,
+                                   double* pDGDiffVec,
                                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
                                    unsigned int gNodeNumDim, double h, double* gNodeVelVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < pNum){
+        double h2_inv = 1.0 / (h * h);
         double pos[3] = {pPosVec[i * 3], pPosVec[i * 3 + 1], pPosVec[i * 3 + 2]};
         int b_idx_x = max(0, int((pos[0] - gOriCorner_x - 0.5 * h) / h));
         int b_idx_y = max(0, int((pos[1] - gOriCorner_y - 0.5 * h) / h));
@@ -483,6 +484,12 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
         double t_vel_x = 0.0;
         double t_vel_y = 0.0;
         double t_vel_z = 0.0;
+        double res_affine_vel[9] = {
+                pAffineVelVec[9 * i], pAffineVelVec[9 * i + 1], pAffineVelVec[9 * i + 2],
+                pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
+                pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8],
+        };
+
         for (int idx_x_offset = 0; idx_x_offset < 3; ++idx_x_offset){
             for (int idx_y_offset = 0; idx_y_offset < 3; ++idx_y_offset){
                 for (int idx_z_offset = 0; idx_z_offset < 3; ++idx_z_offset){
@@ -497,14 +504,29 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
                     int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
                     assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
                     assert(g_idx >= 0);
+                    double gVel[3] = {gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]};
 
-                    pVelVec[3 * i] += w * gNodeVelVec[3 * g_idx];
-                    pVelVec[3 * i + 1] += w * gNodeVelVec[3 * g_idx + 1];
-                    pVelVec[3 * i + 2] += w * gNodeVelVec[3 * g_idx + 2];
+                    pVelVec[3 * i] += w * gVel[0];
+                    pVelVec[3 * i + 1] += w * gVel[1];
+                    pVelVec[3 * i + 2] += w * gVel[2];
 
-                    t_vel_x += gNodeVelVec[3 * g_idx];
-                    t_vel_y += gNodeVelVec[3 * g_idx + 1];
-                    t_vel_z += gNodeVelVec[3 * g_idx + 2];
+                    double xi_min_xp[3] = {b_pos[0] - pos[0],
+                                           b_pos[1] - pos[1],
+                                           b_pos[2] - pos[2]};
+                    double vi_xi_xp[9] = {0.0};
+                    OuterProduct(gVel, xi_min_xp, vi_xi_xp);
+                    double acc_term[9] = {0.0};
+                    ScalarMatMul(4.0 * w * h2_inv, vi_xi_xp, acc_term, 9);
+                    double prev_affine_vel[9] = {
+                            res_affine_vel[0], res_affine_vel[1], res_affine_vel[2],
+                            res_affine_vel[3], res_affine_vel[4], res_affine_vel[5],
+                            res_affine_vel[6], res_affine_vel[7], res_affine_vel[8]
+                    };
+                    MatAdd(prev_affine_vel, acc_term, res_affine_vel, 9);
+
+                    t_vel_x += gVel[0];
+                    t_vel_y += gVel[1];
+                    t_vel_z += gVel[2];
                     // printf("gNode vel:[%f, %f, %f]\n", gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]);
                     t_w += w;
                 }
@@ -512,6 +534,15 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
         }
         assert(abs(t_w - 1.0) < 0.0001);
         double vel_p[3] = {pVelVec[3 * i], pVelVec[3 * i + 1], pVelVec[3 * i + 2]};
+        pAffineVelVec[9 * i] = res_affine_vel[0];
+        pAffineVelVec[9 * i + 1] = res_affine_vel[1];
+        pAffineVelVec[9 * i + 2] = res_affine_vel[2];
+        pAffineVelVec[9 * i + 3] = res_affine_vel[3];
+        pAffineVelVec[9 * i + 4] = res_affine_vel[4];
+        pAffineVelVec[9 * i + 5] = res_affine_vel[5];
+        pAffineVelVec[9 * i + 6] = res_affine_vel[6];
+        pAffineVelVec[9 * i + 7] = res_affine_vel[7];
+        pAffineVelVec[9 * i + 8] = res_affine_vel[8];
 
         // Update deformation gradient
         double grad_v[9] = {0.0};
@@ -571,6 +602,14 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
         pDGVec[9 * i + 6] = Fp[6];
         pDGVec[9 * i + 7] = Fp[7];
         pDGVec[9 * i + 8] = Fp[8];
+        double dgDet = Mat3x3Determinant(Fp);
+        assert(dgDet > 0);
+        if (dgDet > 1.0){
+            pDGDiffVec[i] = dgDet;
+        }else{
+            pDGDiffVec[i] = 1.0 / dgDet;
+        }
+
 
         /*
         if (i == 5252144){
@@ -587,6 +626,27 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
         pPosVec[3 * i] += dt * vel_p[0];
         pPosVec[3 * i + 1] += dt * vel_p[1];
         pPosVec[3 * i + 2] += dt * vel_p[2];
+
+        // Check whether particle is out of the boundary
+        double upperBound[3] = {gOriCorner_x + h * (gNodeNumDim - 1),
+                                gOriCorner_y + h * (gNodeNumDim - 1),
+                                gOriCorner_z + h * (gNodeNumDim - 1)};
+        if (pPosVec[3 * i] < gOriCorner_x || pPosVec[3 * i] > upperBound[0] ||
+            pPosVec[3 * i + 1] < gOriCorner_y || pPosVec[3 * i + 1] > upperBound[1] ||
+            pPosVec[3 * i + 2] < gOriCorner_z || pPosVec[3 * i + 2] > upperBound[2]){
+            printf("Particle ID:%d; vel=[%f, %f, %f]; pos=[%f, %f, %f]; Lowerbound=[%f, %f, %f]; UpperBound=[%f, %f, %f]\n\n", i,
+                   vel_p[0], vel_p[1], vel_p[2],
+                   pPosVec[3 * i], pPosVec[3 * i + 1], pPosVec[3 * i + 2],
+                   gOriCorner_x, gOriCorner_y, gOriCorner_z,
+                   upperBound[0], upperBound[1], upperBound[2]);
+            assert(pPosVec[3 * i] >= gOriCorner_x);
+            assert(pPosVec[3 * i] < upperBound[0]);
+            assert(pPosVec[3 * i + 1] >= gOriCorner_y);
+            assert(pPosVec[3 * i + 1] < upperBound[1]);
+            assert(pPosVec[3 * i + 2] >= gOriCorner_z);
+            assert(pPosVec[3 * i + 2] < upperBound[2]);
+        }
+
         // printf("total vel:[%f, %f, %f]\n", t_vel_x, t_vel_y, t_vel_z);
         // printf("pVel:[%f, %f, %f]\n", t_vel_x, t_vel_y, t_vel_z);
     }
@@ -669,7 +729,7 @@ void MPMSimulator::step() {
         std::cerr << "Clean grid force error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-
+/*
 #ifdef DEBUG
     std::cout << "********* Frame " << current_frame << " starts **********" << std::endl << std::endl;
     double standard_speed = ext_gravity * t;
@@ -678,6 +738,9 @@ void MPMSimulator::step() {
     std::cout << "n pos:[" << mParticles.particlePosVec[1 * 3] << " " << mParticles.particlePosVec[1 * 3 + 1] << " " << mParticles.particlePosVec[1 * 3 + 2] << "]" << std::endl << std::endl;
 
 #endif
+*/
+
+/*
     double* pForceVec;
     err = cudaMalloc(&pForceVec, mParticles.particleNum * sizeof(double) * 3);
     if (err != cudaSuccess){
@@ -691,6 +754,7 @@ void MPMSimulator::step() {
         std::cerr << "Allocate attention idx error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
+*/
 
     // 2. Transfer mass to the grid.
     // 3. Transfer velocity(Momentum) to the grid.
@@ -702,9 +766,10 @@ void MPMSimulator::step() {
                                             mParticles.pVelVecGRAM,
                                             mParticles.pDeformationGradientGRAM,
                                             mParticles.pVolVecGRAM,
-                                            pForceVec,
+                                            // pForceVec,
+                                            mParticles.pAffineVelGRAM,
                                             mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
-                                            gAttentionIdx,
+                                            // gAttentionIdx,
                                             mGrid.nodeNumDim,
                                             mGrid.h, mParticles.mMaterialVec[0].mMu, mParticles.mMaterialVec[0].mLambda,
                                             mGrid.nodeMassVec,
@@ -718,6 +783,7 @@ void MPMSimulator::step() {
         exit(EXIT_FAILURE);
     }
 
+/*
 #ifdef DEBUG
     double pos0_y_init = mParticles.particlePosVec[1];
     double vel0_y_init = mParticles.particleVelVec[1];
@@ -773,6 +839,7 @@ void MPMSimulator::step() {
         std::cerr << "Clean AttentionLabel error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
+*/
     /*
     FindAllRelatedParticles<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
                                                                   mParticles.pPosVecGRAM,
@@ -784,13 +851,14 @@ void MPMSimulator::step() {
                                                                   gAttentionIdx,
                                                                   pAttentionLabel);
     */
-
+/*
     double* h_pForce = (double*)malloc(sizeof(double) * mParticles.particleNum * 3);
     err = cudaMemcpy(h_pForce, pForceVec, sizeof(double) * mParticles.particleNum * 3, cudaMemcpyDeviceToHost);
     if (err != cudaSuccess){
         std::cerr << "Copy pForceVec memory error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
+*/
     /* Attention Nodes:
     for (int i = 0; i < mParticles.particleNum; ++i){
         if (h_pAttentionLabel[i] == 1){
@@ -800,14 +868,14 @@ void MPMSimulator::step() {
         }
     }
     */
-#endif
+// #endif
 
     // 4. Calculate the velocity.
     // 5. Apply gravity.
     int gNum = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim;
     int gThreadsPerBlock = 256;
     int gBlocksPerGrid = (gNum + gThreadsPerBlock - 1) / gThreadsPerBlock;
-    VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, dt, ext_gravity,
+    VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, adp_dt, ext_gravity,
                                                     mGrid.originCorner[0] + 10 * mGrid.h,
                                                     mGrid.originCorner[1] + 10 * mGrid.h,
                                                     mGrid.originCorner[2] + 10 * mGrid.h,
@@ -828,20 +896,27 @@ void MPMSimulator::step() {
 
 #endif
 
-    // 5.5 Clean the velocity on the particles.
+    // 5.5 Clean the velocity and affine velocity on the particles.
     // 6. Interpolate new velocity back to particles.
     // 7. Move particles.
     err = cudaMemset(mParticles.pVelVecGRAM, 0, mParticles.velVecByteSize);
     if (err != cudaSuccess){
-        std::cerr << "Clean grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+        std::cerr << "Clean particle velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+        exit(1);
+    }
+    err = cudaMemset(mParticles.pAffineVelGRAM, 0, mParticles.affineVelVecByteSize);
+    if (err != cudaSuccess){
+        std::cerr << "Clean particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
     std::fill(mParticles.particleVelVec.begin(), mParticles.particleVelVec.end(), 0.0);
     InterpolateAndMove<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
-                                                             dt,
+                                                             adp_dt,
                                                              mParticles.pPosVecGRAM,
                                                              mParticles.pVelVecGRAM,
                                                              mParticles.pDeformationGradientGRAM,
+                                                             mParticles.pAffineVelGRAM,
+                                                             mParticles.pDeformationGradientDiffGRAM,
                                                              mGrid.originCorner[0],
                                                              mGrid.originCorner[1],
                                                              mGrid.originCorner[2],
@@ -866,7 +941,17 @@ void MPMSimulator::step() {
         std::cerr << "Copy particle velocity memory error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    t += dt;
+
+    // Time step control:
+    thrust::device_ptr<double> dev_ptr_start = thrust::device_pointer_cast(mParticles.pDeformationGradientDiffGRAM);
+    thrust::device_ptr<double> dev_ptr_end = thrust::device_pointer_cast(mParticles.pDeformationGradientDiffGRAM + mParticles.particleNum);
+    auto max_diff = thrust::max_element(dev_ptr_start, dev_ptr_end);
+    double tmp = *max_diff * *max_diff * *max_diff;
+    double factor = std::min(10.0, tmp);
+    adp_dt = max_dt / factor;
+    // auto min_diff = thrust::min_element(dev_ptr_start, dev_ptr_end);
+    // std::cout << "Max determinant:" << *max_diff << std::endl; //<< " Min determinant:" << *min_diff << std::endl;
+
 
 #ifdef DEBUG
     // Check whether the energy is consistent.
@@ -919,10 +1004,11 @@ void MPMSimulator::step() {
 
     std::cout << "***********************************" << std::endl << std::endl;
 #endif
-    cudaFree(pForceVec);
-    cudaFree(gAttentionIdx);
+
+    // cudaFree(pForceVec);
+    // cudaFree(gAttentionIdx);
     ++current_frame;
-    current_time += dt;
+    current_time += adp_dt;
 }
 
 

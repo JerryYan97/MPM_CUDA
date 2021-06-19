@@ -28,11 +28,15 @@ struct ParticleGroup{
     double* pVelVecGRAM;
     double* pVolVecGRAM;
     double* pDeformationGradientGRAM;
+    double* pAffineVelGRAM;
+    double* pDeformationGradientDiffGRAM;
     size_t posVecByteSize;
     size_t massVecByteSize;
     size_t velVecByteSize;
     size_t volVecByteSize;
     size_t dgVecByteSize;
+    size_t affineVelVecByteSize;
+    size_t dgDiffVecByteSize;
 };
 
 struct Grid{
@@ -51,8 +55,7 @@ class MPMSimulator {
 private:
     // Debug:
     std::vector<int> idx_vec;
-
-    double dt;
+    double max_dt;
     double ext_gravity;
 
     double min_bound_x;
@@ -68,7 +71,7 @@ private:
     void initParticles(std::vector<double>& volVec);
 
 public:
-    double t;
+    double adp_dt;
     double current_time;
     int current_frame;
 

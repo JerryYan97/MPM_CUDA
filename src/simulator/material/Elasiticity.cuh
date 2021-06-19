@@ -33,5 +33,4 @@ public:
     }
 };
 
-
 #endif //JIARUI_MPM_ELASITICITY_CUH
