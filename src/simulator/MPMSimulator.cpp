@@ -214,9 +214,9 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
         int lower_x_idx = int(mModel.mLowerBound[0] / gap);
         int lower_y_idx = int(mModel.mLowerBound[1] / gap);
         int lower_z_idx = int(mModel.mLowerBound[2] / gap);
-        int upper_x_idx = int(mModel.mUpperBound[0] / gap);
-        int upper_y_idx = int(mModel.mUpperBound[1] / gap);
-        int upper_z_idx = int(mModel.mUpperBound[2] / gap);
+        int upper_x_idx = int(mModel.mUpperBound[0] / gap) + 1;
+        int upper_y_idx = int(mModel.mUpperBound[1] / gap) + 1;
+        int upper_z_idx = int(mModel.mUpperBound[2] / gap) + 1;
 
         // Put random particles into every grids between the lower and upper grid.
         MeshObject* mMOBJ = construct_mesh_object(mModel.mQmVertData.size() / 3,
@@ -341,11 +341,16 @@ MPMSimulator::~MPMSimulator() {
 double MPMSimulator::calVolmue(std::string &place) {
     std::string cube_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string cylinder_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
+    std::string sphere_path = std::string(PROJ_PATH) + "/models/sphere.obj";
+
     if (place == cube_path){
         return 2.0 * 2.0 *  2.0; // For cube
     }
     if (place == cylinder_path){
         return 3.1415926 * 4.0;
+    }
+    if (place == sphere_path){
+        return 3.1415926;
     }
 }
 

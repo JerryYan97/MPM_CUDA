@@ -10,6 +10,18 @@
 #include "../../thirdparties/cudaSVD/svd3_cuda.h"
 
 template<class T>
+__forceinline__
+__device__ T clamp(const T x, const T lowerBound, const T upperBound){
+    if (x < lowerBound){
+        return lowerBound;
+    }else if (x > upperBound){
+        return upperBound;
+    }else{
+        return x;
+    }
+}
+
+template<class T>
 __device__ void Mat3x3Cofactor(const T* F, T* res){
     res[0] = F[4] * F[8] - F[5] * F[7];
     res[1] = F[5] * F[6] - F[3] * F[8];
@@ -26,6 +38,26 @@ template<class T>
 __forceinline__
 __device__ T Mat3x3Determinant(const T* X){
     return X[0] * (X[4] * X[8] - X[5] * X[7]) - X[1] * (X[3] * X[8] - X[5] * X[6]) + X[2] * (X[3] * X[7] - X[4] * X[6]);
+}
+
+template<class T>
+__forceinline__
+__device__ T Mat3x3Inv(const T* X, T* X_inv){
+    T det_X = Mat3x3Determinant(X);
+    if (det_X == 0.f){
+        printf("Matrix inverse error.");
+    }else{
+        T inv_det_X = 1.f / det_X;
+        X_inv[0] = inv_det_X * (X[4] * X[8] - X[5] * X[7]);
+        X_inv[1] = inv_det_X * (X[2] * X[7] - X[1] * X[8]);
+        X_inv[2] = inv_det_X * (X[1] * X[5] - X[2] * X[4]);
+        X_inv[3] = inv_det_X * (X[5] * X[6] - X[3] * X[8]);
+        X_inv[4] = inv_det_X * (X[0] * X[8] - X[2] * X[6]);
+        X_inv[5] = inv_det_X * (X[2] * X[3] - X[0] * X[5]);
+        X_inv[6] = inv_det_X * (X[3] * X[7] - X[4] * X[6]);
+        X_inv[7] = inv_det_X * (X[1] * X[6] - X[0] * X[7]);
+        X_inv[8] = inv_det_X * (X[0] * X[4] - X[1] * X[3]);
+    }
 }
 
 template<class T>
@@ -58,17 +90,17 @@ __device__ void FixedCorotatedPStressSigma(float sigma1, float sigma2, float sig
     dig3 = 2.f * mu * (sigma3 - 1.f) + lambda * (sigma1 * sigma2 * sigma3 - 1.f) * sigma1 * sigma2;
 }
 
-__device__ void FixedCorotatedPStress(float F11, float F12, float F13,
-                                      float F21, float F22, float F23,
-                                      float F31, float F32, float F33,
-                                      float mu, float lambda,
-                                      float &P11, float &P12, float &P13,
-                                      float &P21, float &P22, float &P23,
-                                      float &P31, float &P32, float &P33){
-    float U11, U12, U13, U21, U22, U23, U31, U32, U33;
-    float V11, V12, V13, V21, V22, V23, V31, V32, V33;
-    float S11, S22, S33;
-    float dig1, dig2, dig3;
+__device__ void PolarSVD(float F11, float F12, float F13,
+                         float F21, float F22, float F23,
+                         float F31, float F32, float F33,
+                         float &U11, float &U12, float &U13,
+                         float &U21, float &U22, float &U23,
+                         float &U31, float &U32, float &U33,	// output U
+                         float &S11, float &S22, float &S33,	// output S
+                         float &V11, float &V12, float &V13,
+                         float &V21, float &V22, float &V23,
+                         float &V31, float &V32, float &V33	// output V
+                         ){
 
     svd(F11, F12, F13, F21, F22, F23, F31, F32, F33,
         U11, U12, U13, U21, U22, U23, U31, U32, U33,
@@ -87,7 +119,6 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
         U[5] = -U[5];
         U[8] = -U[8];
         S33 = -S33;
-        // printf("Det(U):%f, S11:%f, S22:%f, S33:%f", Mat3x3Determinant(U), S11, S22, S33);
         assert(Mat3x3Determinant(U) >= 0.f);
     }
 
@@ -98,6 +129,40 @@ __device__ void FixedCorotatedPStress(float F11, float F12, float F13,
         S33 = -S33;
         assert(Mat3x3Determinant(V) >= 0.f);
     }
+
+    V11 = V[0]; V12 = V[1]; V13 = V[2];
+    V21 = V[3]; V22 = V[4]; V23 = V[5];
+    V31 = V[6]; V32 = V[7]; V33 = V[8];
+
+    U11 = U[0]; U12 = U[1]; U13 = U[2];
+    U21 = U[3]; U22 = U[4]; U23 = U[5];
+    U31 = U[6]; U32 = U[7]; U33 = U[8];
+}
+
+
+__device__ void FixedCorotatedPStress(float F11, float F12, float F13,
+                                      float F21, float F22, float F23,
+                                      float F31, float F32, float F33,
+                                      float mu, float lambda,
+                                      float &P11, float &P12, float &P13,
+                                      float &P21, float &P22, float &P23,
+                                      float &P31, float &P32, float &P33){
+    float U11, U12, U13, U21, U22, U23, U31, U32, U33;
+    float V11, V12, V13, V21, V22, V23, V31, V32, V33;
+    float S11, S22, S33;
+    float dig1, dig2, dig3;
+
+    PolarSVD(F11, F12, F13, F21, F22, F23, F31, F32, F33,
+        U11, U12, U13, U21, U22, U23, U31, U32, U33,
+        S11, S22, S33,
+        V11, V12, V13, V21, V22, V23, V31, V32, V33);
+
+    float V[9] = {V11, V12, V13,
+                  V21, V22, V23,
+                  V31, V32, V33};
+    float U[9] = {U11, U12, U13,
+                  U21, U22, U23,
+                  U31, U32, U33};
 
     FixedCorotatedPStressSigma(S11, S22, S33, mu, lambda, dig1, dig2, dig3);
 
@@ -159,48 +224,6 @@ __device__ void OuterProduct(const T* v1, const T* v2, T* res){
     res[8] = v1[2] * v2[2];
 }
 
-template<class T>
-__device__ void FixedCorotatedStress2(const T* F, const T mu, const T lambda, T* P){
-    T F_invT[9] = {0.0};
-    Mat3x3Cofactor(F, F_invT);
-    T J = Mat3x3Determinant(F);
-
-    float U11, U12, U13, U21, U22, U23, U31, U32, U33;
-    float V11, V12, V13, V21, V22, V23, V31, V32, V33;
-    float S11, S22, S33;
-
-    svd(F[0], F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8],
-        U11, U12, U13, U21, U22, U23, U31, U32, U33,
-        S11, S22, S33,
-        V11, V12, V13, V21, V22, V23, V31, V32, V33);
-
-    float V[9] = {V11, V12, V13,
-                  V21, V22, V23,
-                  V31, V32, V33};
-    float U[9] = {U11, U12, U13,
-                  U21, U22, U23,
-                  U31, U32, U33};
-    float R[9] = {0.f};
-    float term1[9] = {0.f};
-    float term2[9] = {0.f};
-
-    float V_transpose[9];
-    MatTranspose(V, V_transpose);
-    MatMul3x3(U, V_transpose, R);
-
-    float min_R[9] = {0.f};
-    ScalarMatMul(-1.f, R, min_R, 9);
-
-    float F_min_R[9] = {0.f};
-    MatAdd(F, min_R, F_min_R, 9);
-    ScalarMatMul(2.f * mu, F_min_R, term1, 9);
-
-    float JF_invT[9] = {0.f};
-    Mat3x3Cofactor(F, JF_invT);
-    ScalarMatMul(lambda * (J - 1.f), JF_invT, term2, 9);
-
-    MatAdd(term1, term2, P, 9);
-}
 
 __device__ double BSplineInterpolation1DDerivative(const double x){
     if (x > -0.5 && x < 0.5){
@@ -257,34 +280,71 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
         double pos[3] = {pPosVec[i * 3], pPosVec[i * 3 + 1], pPosVec[i * 3 + 2]};
         double m = pMass;
         double vel[3] = {pVelVec[i * 3], pVelVec[i * 3 + 1], pVelVec[i * 3 + 2]};
-        float tmpDeformationGradient[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
-                                           float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
-                                           float(pEDGVec[9 * i + 6]), float(pEDGVec[9 * i + 7]), float(pEDGVec[9 * i + 8])};
         double tmpAffineVel[9] = {pAffineVelVec[9 * i], pAffineVelVec[9 * i + 1], pAffineVelVec[9 * i + 2],
                                   pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
                                   pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8]};
-        float stress[9] = {0.f};
-        FixedCorotatedPStress(tmpDeformationGradient[0], tmpDeformationGradient[1], tmpDeformationGradient[2],
-                              tmpDeformationGradient[3], tmpDeformationGradient[4], tmpDeformationGradient[5],
-                              tmpDeformationGradient[6], tmpDeformationGradient[7], tmpDeformationGradient[8],
-                              float(mu), float(lambda),
-                              stress[0], stress[1], stress[2],
-                              stress[3], stress[4], stress[5],
-                              stress[6], stress[7], stress[8]);
-        // float stress2[9] = {0.f};
-        // FixedCorotatedStress2(tmpDeformationGradient, float(mu), float(lambda), stress2);
-
-        // float tar_stress[9] = {0.0};
-        // Times_Rotated_dP_dF_FixedCorotated(float(mu), float(lambda), tmpDeformationGradient, );
-
-        float F_transpose[9] = {0.f};
-        MatTranspose(tmpDeformationGradient, F_transpose);
         float tmpMat[9] = {0.f};
-        // MatMul3x3(stress, F_transpose, tmpMat);
-        MatMul3x3(stress, F_transpose, tmpMat);
 
-        float mVol(pVol);
-        ScalarMatMul(mVol, tmpMat, tmpMat, 9);
+        if (pType == JELLO){
+            float tmpDeformationGradient[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
+                                               float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
+                                               float(pEDGVec[9 * i + 6]), float(pEDGVec[9 * i + 7]), float(pEDGVec[9 * i + 8])};
+            float stress[9] = {0.f};
+            FixedCorotatedPStress(tmpDeformationGradient[0], tmpDeformationGradient[1], tmpDeformationGradient[2],
+                                  tmpDeformationGradient[3], tmpDeformationGradient[4], tmpDeformationGradient[5],
+                                  tmpDeformationGradient[6], tmpDeformationGradient[7], tmpDeformationGradient[8],
+                                  float(mu), float(lambda),
+                                  stress[0], stress[1], stress[2],
+                                  stress[3], stress[4], stress[5],
+                                  stress[6], stress[7], stress[8]);
+            float F_transpose[9] = {0.f};
+            MatTranspose(tmpDeformationGradient, F_transpose);
+            MatMul3x3(stress, F_transpose, tmpMat);
+            float mVol(pVol);
+            ScalarMatMul(mVol, tmpMat, tmpMat, 9);
+        }else if (pType == SNOW){
+            float tmpEDG[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
+                               float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
+                               float(pEDGVec[9 * i + 6]), float(pEDGVec[9 * i + 7]), float(pEDGVec[9 * i + 8])};
+            float tmpPDG[9] = {float(pPDGVec[9 * i]), float(pPDGVec[9 * i + 1]), float(pPDGVec[9 * i + 2]),
+                               float(pPDGVec[9 * i + 3]), float(pPDGVec[9 * i + 4]), float(pPDGVec[9 * i + 5]),
+                               float(pPDGVec[9 * i + 6]), float(pPDGVec[9 * i + 7]), float(pPDGVec[9 * i + 8])};
+            float stress[9] = {0.f};
+
+            float Jp = Mat3x3Determinant(tmpPDG);
+            if (i == 1){
+                printf("Particle 1 Jp:%f \n", Jp);
+            }
+            float xi = 50.f;
+            float harding_coef = expf(xi * (1.f - Jp));
+            float snow_mu = mu * harding_coef;
+            float snow_lambda = lambda * harding_coef;
+
+            /*
+            FixedCorotatedPStress(tmpEDG[0], tmpEDG[1], tmpEDG[2],
+                                  tmpEDG[3], tmpEDG[4], tmpEDG[5],
+                                  tmpEDG[6], tmpEDG[7], tmpEDG[8],
+                                  snow_mu, snow_lambda,
+                                  stress[0], stress[1], stress[2],
+                                  stress[3], stress[4], stress[5],
+                                  stress[6], stress[7], stress[8]);
+            */
+            FixedCorotatedPStress(tmpEDG[0], tmpEDG[1], tmpEDG[2],
+                                  tmpEDG[3], tmpEDG[4], tmpEDG[5],
+                                  tmpEDG[6], tmpEDG[7], tmpEDG[8],
+                                  snow_mu, snow_lambda,
+                                  stress[0], stress[1], stress[2],
+                                  stress[3], stress[4], stress[5],
+                                  stress[6], stress[7], stress[8]);
+
+            float F_transpose[9] = {0.f};
+            MatTranspose(tmpEDG, F_transpose);
+            MatMul3x3(stress, F_transpose, tmpMat);
+            float mVol(pVol);
+            ScalarMatMul(mVol, tmpMat, tmpMat, 9);
+        }
+
+
         /*
         if (i == 1){
             printf("P2G: Tmp Mat of particle 1:\n");
@@ -566,12 +626,6 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
 
                     double vi[3] = {gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]};
 
-                    /*
-                    if (i == 109743){
-                        printf("P109743 related node vel(g_idx=%d)=[%f, %f, %f]:\n", g_idx, vi[0], vi[1], vi[2]);
-                    }
-                    */
-
                     double add_mat[9] = {0.0};
                     OuterProduct(vi, grad_wip, add_mat);
 
@@ -581,48 +635,127 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                 }
             }
         }
-        double Fp[9] = {pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
-                        pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
-                        pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]};
+
         double leftMat[9] = {1.0, 0.0, 0.0,
-                              0.0, 1.0, 0.0,
-                              0.0, 0.0, 1.0};
-        double tmp_leftMat[9] = {1.0, 0.0, 0.0,
                              0.0, 1.0, 0.0,
                              0.0, 0.0, 1.0};
+        double tmp_leftMat[9] = {1.0, 0.0, 0.0,
+                                 0.0, 1.0, 0.0,
+                                 0.0, 0.0, 1.0};
         ScalarMatMul(dt, grad_v, grad_v, 9);
         MatAdd(tmp_leftMat, grad_v, leftMat, 9);
-        double tmp_Fp[9];
-        memcpy(tmp_Fp, Fp, sizeof(double) * 9);
-        MatMul3x3(leftMat, tmp_Fp, Fp);
-        pEDGVec[9 * i] = Fp[0];
-        pEDGVec[9 * i + 1] = Fp[1];
-        pEDGVec[9 * i + 2] = Fp[2];
-        pEDGVec[9 * i + 3] = Fp[3];
-        pEDGVec[9 * i + 4] = Fp[4];
-        pEDGVec[9 * i + 5] = Fp[5];
-        pEDGVec[9 * i + 6] = Fp[6];
-        pEDGVec[9 * i + 7] = Fp[7];
-        pEDGVec[9 * i + 8] = Fp[8];
-        double dgDet = Mat3x3Determinant(Fp);
-        assert(dgDet > 0);
-        if (dgDet > 1.0){
+
+        if (pType == JELLO){
+            double Fp[9] = {pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
+                            pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
+                            pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]};
+
+            double tmp_Fp[9];
+            memcpy(tmp_Fp, Fp, sizeof(double) * 9);
+            MatMul3x3(leftMat, tmp_Fp, Fp);
+            pEDGVec[9 * i] = Fp[0];
+            pEDGVec[9 * i + 1] = Fp[1];
+            pEDGVec[9 * i + 2] = Fp[2];
+            pEDGVec[9 * i + 3] = Fp[3];
+            pEDGVec[9 * i + 4] = Fp[4];
+            pEDGVec[9 * i + 5] = Fp[5];
+            pEDGVec[9 * i + 6] = Fp[6];
+            pEDGVec[9 * i + 7] = Fp[7];
+            pEDGVec[9 * i + 8] = Fp[8];
+            double dgDet = Mat3x3Determinant(Fp);
+            assert(dgDet > 0);
+            if (dgDet > 1.0){
+                pDGDiffVec[i] = dgDet;
+            }else{
+                pDGDiffVec[i] = 1.0 / dgDet;
+            }
+        }else if (pType == SNOW){
+            double eF_n[9] = {
+                    pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
+                    pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
+                    pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]
+            };
+            double pF_n[9] = {
+                    pPDGVec[9 * i], pPDGVec[9 * i + 1], pPDGVec[9 * i + 2],
+                    pPDGVec[9 * i + 3], pPDGVec[9 * i + 4], pPDGVec[9 * i + 5],
+                    pPDGVec[9 * i + 6], pPDGVec[9 * i + 7], pPDGVec[9 * i + 8]
+            };
+            double eF_nplus1_trial[9] = {0.0};
+            MatMul3x3(leftMat, eF_n, eF_nplus1_trial);
+
+            float Uf[9] = {0.f};
+            float Vf[9] = {0.f};
+            float Etaf[9] = {0.f};
+            double Eta_star[9] = {0.0};
+            PolarSVD(float(eF_nplus1_trial[0]), float(eF_nplus1_trial[1]), float(eF_nplus1_trial[2]),
+                float(eF_nplus1_trial[3]), float(eF_nplus1_trial[4]), float(eF_nplus1_trial[5]),
+                float(eF_nplus1_trial[6]), float(eF_nplus1_trial[7]), float(eF_nplus1_trial[8]),
+                Uf[0], Uf[1], Uf[2], Uf[3], Uf[4], Uf[5], Uf[6], Uf[7], Uf[8],
+                Etaf[0], Etaf[4], Etaf[8],
+                Vf[0], Vf[1], Vf[2], Vf[3], Vf[4], Vf[5], Vf[6], Vf[7], Vf[8]);
+
+            double U[9] = {
+                    double(Uf[0]), double(Uf[1]), double(Uf[2]),
+                    double(Uf[3]), double(Uf[4]), double(Uf[5]),
+                    double(Uf[6]), double(Uf[7]), double(Uf[8]),
+            };
+
+            double V[9] = {
+                    double(Vf[0]), double(Vf[1]), double(Vf[2]),
+                    double(Vf[3]), double(Vf[4]), double(Vf[5]),
+                    double(Vf[6]), double(Vf[7]), double(Vf[8]),
+            };
+
+            Eta_star[0] = clamp(double(Etaf[0]), 0.99, 1.01);
+            Eta_star[4] = clamp(double(Etaf[4]), 0.99, 1.01);
+            Eta_star[8] = clamp(double(Etaf[8]), 0.99, 1.01);
+
+            double V_transpose[9] = {0.0};
+            MatTranspose(V, V_transpose);
+
+            double eF_nplus1[9] = {0.0};
+            double leftTmp[9] = {0.0};
+            MatMul3x3(U, Eta_star, leftTmp);
+            MatMul3x3(leftTmp, V_transpose, eF_nplus1);
+
+            double eF_nplus1_inv[9] = {0.0};
+            Mat3x3Inv(eF_nplus1, eF_nplus1_inv);
+
+            double pF_nplus1[9] = {0.0};
+            double leftTmp2[9] = {0.0};
+            MatMul3x3(eF_nplus1_inv, eF_nplus1_trial, leftTmp2);
+            MatMul3x3(leftTmp2, pF_n, pF_nplus1);
+
+            pEDGVec[9 * i] = eF_nplus1[0];
+            pEDGVec[9 * i + 1] = eF_nplus1[1];
+            pEDGVec[9 * i + 2] = eF_nplus1[2];
+            pEDGVec[9 * i + 3] = eF_nplus1[3];
+            pEDGVec[9 * i + 4] = eF_nplus1[4];
+            pEDGVec[9 * i + 5] = eF_nplus1[5];
+            pEDGVec[9 * i + 6] = eF_nplus1[6];
+            pEDGVec[9 * i + 7] = eF_nplus1[7];
+            pEDGVec[9 * i + 8] = eF_nplus1[8];
+
+            pPDGVec[9 * i] = pF_nplus1[0];
+            pPDGVec[9 * i + 1] = pF_nplus1[1];
+            pPDGVec[9 * i + 2] = pF_nplus1[2];
+            pPDGVec[9 * i + 3] = pF_nplus1[3];
+            pPDGVec[9 * i + 4] = pF_nplus1[4];
+            pPDGVec[9 * i + 5] = pF_nplus1[5];
+            pPDGVec[9 * i + 6] = pF_nplus1[6];
+            pPDGVec[9 * i + 7] = pF_nplus1[7];
+            pPDGVec[9 * i + 8] = pF_nplus1[8];
+
+            double dgDet = 0.0;
+            double pdgDet = Mat3x3Determinant(pF_nplus1);
+            assert(pdgDet > 0);
+            if (pdgDet > 1.0){
+                dgDet = max(dgDet, pdgDet);
+            }else{
+                dgDet = max(dgDet, 1.0 / pdgDet);
+            }
             pDGDiffVec[i] = dgDet;
-        }else{
-            pDGDiffVec[i] = 1.0 / dgDet;
         }
-
-
-        /*
-        if (i == 5252144){
-            printf("Updated: F5252144:\n");
-            printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                   Fp[0], Fp[1], Fp[2],
-                   Fp[3], Fp[4], Fp[5],
-                   Fp[6], Fp[7], Fp[8]);
-            printf("Updated: F5252144 determinant:%f\n", Mat3x3Determinant(Fp));
-        }
-        */
 
         // Apply velocity
         pPosVec[3 * i] += dt * vel_p[0];
@@ -648,9 +781,6 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
             assert(pPosVec[3 * i + 2] >= gOriCorner_z);
             assert(pPosVec[3 * i + 2] < upperBound[2]);
         }
-
-        // printf("total vel:[%f, %f, %f]\n", t_vel_x, t_vel_y, t_vel_z);
-        // printf("pVel:[%f, %f, %f]\n", t_vel_x, t_vel_y, t_vel_z);
     }
 }
 
