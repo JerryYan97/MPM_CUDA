@@ -7,7 +7,11 @@
 
 #include <iostream>
 
-class FixedCorotatedMaterial{
+enum MaterialType{
+    JELLO, SNOW, WATER, SAND
+};
+
+class Material{
 private:
     double mYoungsModulus;
     double mPoissonRatio;
@@ -16,7 +20,15 @@ public:
     double mLambda;
     double mMu;
     double mDensity;
-    FixedCorotatedMaterial(double iYM, double iPR, double iDensity){
+
+    MaterialType mType;
+
+    Material():
+    mYoungsModulus(0.0), mPoissonRatio(0.0), mLambda(0.0), mMu(0.0), mDensity(0.0), mType(JELLO)
+    {}
+
+    Material(double iYM, double iPR, double iDensity, MaterialType iType):
+    mType(iType){
         mYoungsModulus = iYM;
         mPoissonRatio = iPR;
         if(mYoungsModulus < 0){

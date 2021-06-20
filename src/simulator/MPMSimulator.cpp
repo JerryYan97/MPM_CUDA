@@ -7,138 +7,107 @@
 #include "../model/model.h"
 #include <random>
 
-void MPMSimulator::initParticles(std::vector<double> &volVec) {
+void MPMSimulator::initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo) {
     cudaError_t err = cudaSuccess;
-    // Init the sampling result.
-    mParticles.particleMassVec.resize(mParticles.particleNum);
-    mParticles.particleVelVec.resize(mParticles.particleNum * 3);
-    std::fill(mParticles.particleVelVec.begin(), mParticles.particleVelVec.end(), 0.0);
-    // Init the volume, mass result.
-    mParticles.particleVolVec.resize(mParticles.particleNum);
-    for (int i = 0; i < volVec.size(); ++i) {
-        double pVol = volVec[i] / double(mParticles.particleNumDiv[i]);
-        if (i == 0){
-            std::fill(mParticles.particleVolVec.begin(),
-                      mParticles.particleVolVec.begin() + mParticles.particleNumDiv[0],
-                      pVol);
-            std::fill(mParticles.particleMassVec.begin(),
-                      mParticles.particleMassVec.begin() + mParticles.particleNumDiv[0],
-                      pVol * mParticles.mMaterialVec[i].mDensity);
-        }
-        else{
-            int beginOffset = 0;
-            for (int j = 0; j < i; ++j) {
-                beginOffset += mParticles.particleNumDiv[j];
-            }
-            std::fill(mParticles.particleVolVec.begin() + beginOffset,
-                      mParticles.particleVolVec.begin() + beginOffset + mParticles.particleNumDiv[i],
-                      pVol);
-            std::fill(mParticles.particleMassVec.begin() + beginOffset,
-                      mParticles.particleMassVec.begin() + beginOffset + mParticles.particleNumDiv[i],
-                      pVol * mParticles.mMaterialVec[i].mDensity);
-        }
+    // Init the velocity.
+    std::vector<double> particleVelVec(initPG.particleNum * 3, 0.0);
+    for (int i = 0; i < initPG.particleNum; ++i) {
+        particleVelVec[i * 3] = initObjInfo.initVel[0];
+        particleVelVec[i * 3 + 1] = initObjInfo.initVel[1];
+        particleVelVec[i * 3 + 2] = initObjInfo.initVel[2];
     }
+
     // Init the deformation gradient.
-    std::vector<double> tmpDeformationGradientVec(mParticles.particleNum * 9, 0.0);
-    for (int i = 0; i < mParticles.particleNum; ++i) {
+    std::vector<double> tmpDeformationGradientVec(initPG.particleNum * 9, 0.0);
+    for (int i = 0; i < initPG.particleNum; ++i) {
         tmpDeformationGradientVec[9 * i] = 1.0;
         tmpDeformationGradientVec[9 * i + 4] = 1.0;
         tmpDeformationGradientVec[9 * i + 8] = 1.0;
     }
 
-    mParticles.posVecByteSize = mParticles.particleNum * 3 * sizeof(double);
-    mParticles.massVecByteSize = mParticles.particleNum * sizeof(double);
-    mParticles.velVecByteSize = mParticles.particleNum * 3 * sizeof(double);
-    mParticles.volVecByteSize = mParticles.particleNum * sizeof(double);
-    mParticles.dgVecByteSize = mParticles.particleNum * 9 * sizeof(double); // 11, 12, 13, 21, 22, 23, 31, 32, 33.
-    mParticles.affineVelVecByteSize = mParticles.particleNum * 9 * sizeof(double);
-    mParticles.dgDiffVecByteSize = mParticles.particleNum * sizeof(double);
+    initPG.posVecByteSize = initPG.particleNum * 3 * sizeof(double);
+    initPG.velVecByteSize = initPG.particleNum * 3 * sizeof(double);
+    if (initObjInfo.mMaterial.mType == SNOW){
+        initPG.pDgVecByteSize = initPG.particleNum * 9 * sizeof(double);
+    }else{
+        initPG.pDgVecByteSize = 0;
+    }
+    initPG.eDgVecByteSize = initPG.particleNum * 9 * sizeof(double);
+    initPG.affineVelVecByteSize = initPG.particleNum * 9 * sizeof(double);
+    initPG.dgDiffVecByteSize = initPG.particleNum * sizeof(double);
 
-    err = cudaMalloc((void **)&mParticles.pPosVecGRAM, mParticles.posVecByteSize);
+    err = cudaMalloc((void **)&initPG.pPosVecGRAM, initPG.posVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Allocate particles pos error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemcpy(mParticles.pPosVecGRAM, mParticles.particlePosVec.data(),
-                     mParticles.posVecByteSize, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(initPG.pPosVecGRAM, initPG.particlePosVec.data(),
+                     initPG.posVecByteSize, cudaMemcpyHostToDevice);
     if (err != cudaSuccess){
         std::cerr << "Init particles pos error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 
-    err = cudaMalloc((void **)&mParticles.pMassVecGRAM, mParticles.massVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Allocate particles mass error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMemcpy(mParticles.pMassVecGRAM, mParticles.particleMassVec.data(),
-                     mParticles.massVecByteSize, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess){
-        std::cerr << "Init particles mass error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaMalloc((void **)&mParticles.pVelVecGRAM, mParticles.velVecByteSize);
+    err = cudaMalloc((void **)&initPG.pVelVecGRAM, initPG.velVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Allocate particles velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemcpy(mParticles.pVelVecGRAM, mParticles.particleVelVec.data(),
-                     mParticles.velVecByteSize, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(initPG.pVelVecGRAM, particleVelVec.data(),
+                     initPG.velVecByteSize, cudaMemcpyHostToDevice);
     if (err != cudaSuccess){
         std::cerr << "Init particles velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 
-    err = cudaMalloc((void **)&mParticles.pVolVecGRAM, mParticles.volVecByteSize);
+    err = cudaMalloc((void **)&initPG.pElasiticityDeformationGradientGRAM, initPG.eDgVecByteSize);
     if (err != cudaSuccess){
-        std::cerr << "Allocate particles volume error." << std::endl << cudaGetErrorString(err) << std::endl;
+        std::cerr << "Allocate particles elasiticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemcpy(mParticles.pVolVecGRAM, mParticles.particleVolVec.data(),
-                     mParticles.volVecByteSize, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess){
-        std::cerr << "Init particles volume error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaMalloc((void **)&mParticles.pDeformationGradientGRAM, mParticles.dgVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Allocate particles deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMemcpy(mParticles.pDeformationGradientGRAM, tmpDeformationGradientVec.data(),
-                     mParticles.dgVecByteSize, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(initPG.pElasiticityDeformationGradientGRAM, tmpDeformationGradientVec.data(),
+                     initPG.eDgVecByteSize, cudaMemcpyHostToDevice);
     if (err != cudaSuccess){
         std::cerr << "Init deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 
-    err = cudaMalloc((void **)&mParticles.pAffineVelGRAM, mParticles.affineVelVecByteSize);
+    if (initObjInfo.mMaterial.mType == SNOW){
+        err = cudaMalloc((void **)&initPG.pPlasiticityDeformationGradientGRAM, initPG.pDgVecByteSize);
+        if (err != cudaSuccess){
+            std::cerr << "Allocate particles plasiticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+        err = cudaMemcpy(initPG.pPlasiticityDeformationGradientGRAM, tmpDeformationGradientVec.data(),
+                         initPG.pDgVecByteSize, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess){
+            std::cerr << "Init deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+    }
+
+    err = cudaMalloc((void **)&initPG.pAffineVelGRAM, initPG.affineVelVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Allocate particles affine velocity matrix error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemset(mParticles.pAffineVelGRAM, 0, mParticles.affineVelVecByteSize);
+    err = cudaMemset(initPG.pAffineVelGRAM, 0, initPG.affineVelVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Set particles affine velocity matrix error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 
-    err = cudaMalloc((void **)&mParticles.pDeformationGradientDiffGRAM, mParticles.dgDiffVecByteSize);
+    err = cudaMalloc((void **)&initPG.pDeformationGradientDiffGRAM, initPG.dgDiffVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Allocate particles deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemset(mParticles.pDeformationGradientDiffGRAM, 0, mParticles.dgDiffVecByteSize);
+    err = cudaMemset(initPG.pDeformationGradientDiffGRAM, 0, initPG.dgDiffVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Set particles deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-
-
 }
-
 
 void MPMSimulator::initGrid(double gap, unsigned int nodeNumDim) {
     // Init grid
@@ -172,285 +141,133 @@ void MPMSimulator::initGrid(double gap, unsigned int nodeNumDim) {
 }
 
 void MPMSimulator::showMemUsage() {
+
+    float t_posVecByteSize = 0.f;
+    float t_velVecByteSize = 0.f;
+    float t_eDgVecByteSize = 0.f;
+    float t_pDgVecByteSize = 0.f;
+    float t_dgDiffByteSize = 0.f;
+    float t_affineVelVecByteSize = 0.f;
+
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i) {
+        t_posVecByteSize += float(mParticlesGroupsVec[i].posVecByteSize);
+        t_velVecByteSize += float(mParticlesGroupsVec[i].velVecByteSize);
+        t_eDgVecByteSize += float(mParticlesGroupsVec[i].eDgVecByteSize);
+        t_pDgVecByteSize += float(mParticlesGroupsVec[i].pDgVecByteSize);
+        t_dgDiffByteSize += float(mParticlesGroupsVec[i].dgDiffVecByteSize);
+        t_affineVelVecByteSize += float(mParticlesGroupsVec[i].affineVelVecByteSize);
+    }
+
     // Show memory usage.
-    std::cout << "Particles mass GRAM and RAM:" << float(mParticles.massVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
-    std::cout << "Particles pos GRAM and RAM:" << float(mParticles.posVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
-    std::cout << "Particles vel GRAM and RAM:" << float(mParticles.velVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
-
-    std::cout << "Sampled particle number:" << mParticles.particleNum << std::endl;
+    std::cout << "Particles pos GRAM:" << t_posVecByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles vel GRAM:" << t_velVecByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles eDG GRAM:" << t_eDgVecByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles pDG GRAM:" << t_pDgVecByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles dgDiff GRAM:" << t_dgDiffByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles affine Velocity GRAM:" << t_affineVelVecByteSize / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Particles total GRAM:" << (t_posVecByteSize + t_velVecByteSize + t_eDgVecByteSize + t_pDgVecByteSize +
+            t_dgDiffByteSize + t_affineVelVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
+    std::cout << "Sampled particle number:" << this->totalParticlesNum() << std::endl;
 }
 
-
 MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
-                           std::string &sampleModelPath) {
-    // Init info.
+                           std::vector<ObjInitInfo> &objInitInfoVec) {
+
+    // Init overall simulator info.
     this->max_dt = max_dt;
     this->adp_dt = max_dt;
     ext_gravity = -9.8;
-    FixedCorotatedMaterial mMaterial(1e3, 0.2, 1.1);
-    mParticles.mMaterialVec.push_back(mMaterial);
     current_frame = 0;
     current_time = 0.0;
-
     initGrid(gap, nodeNumDim);
+    min_bound_x = 10000.0;
+    min_bound_y = 10000.0;
+    min_bound_z = 10000.0;
+    max_bound_x = -10000.0;
+    max_bound_y = -10000.0;
+    max_bound_z = -10000.0;
 
-    // Load and sample model.
-    cudaError_t err = cudaSuccess;
-    model mModel(sampleModelPath, 1.f, false);
-    mModel.setTransformation(glm::vec3(1.f),
-                             glm::vec3(5.f, 4.f, 5.f),
-                             35.f,
-                             glm::vec3(1.f, 0.f, 0.f));
+    // Init particles info.
+    for (int i = 0; i < objInitInfoVec.size(); ++i) {
+        ParticleGroup tmpParticleGroup;
+        ObjInitInfo& curInfo = objInitInfoVec[i];
+        tmpParticleGroup.mMaterial = curInfo.mMaterial;
+        cudaError_t err = cudaSuccess;
+        model mModel(curInfo.objPath, 1.f, false);
+        mModel.setTransformation(curInfo.initScale,
+                                 curInfo.initTranslation,
+                                 curInfo.initRotationDegree,
+                                 curInfo.initRotationAxis);
 
-    // Check the obj bounding box is within the grid.
-    if (mModel.mLowerBound[0] < 0.f || mModel.mLowerBound[1] < 0.f || mModel.mLowerBound[2] < 0.f){
-        std::cerr << "ERROR: OBJ lower bound is smaller than grid's origin." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    float gridUpperBound = (nodeNumDim - 1) * gap;
-    if (mModel.mUpperBound[0] > gridUpperBound || mModel.mUpperBound[1] > gridUpperBound || mModel.mUpperBound[2] > gridUpperBound){
-        std::cerr << "ERROR: OBJ upper bound is out of the grid." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    // Get lower and upper grid index
-    int lower_x_idx = int(mModel.mLowerBound[0] / gap);
-    int lower_y_idx = int(mModel.mLowerBound[1] / gap);
-    int lower_z_idx = int(mModel.mLowerBound[2] / gap);
-    int upper_x_idx = int(mModel.mUpperBound[0] / gap);
-    int upper_y_idx = int(mModel.mUpperBound[1] / gap);
-    int upper_z_idx = int(mModel.mUpperBound[2] / gap);
-
-    // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ = construct_mesh_object(mModel.mQmVertData.size() / 3,
-                                              mModel.mQmVertData.data(),
-                                              mModel.mQMIndData.size() / 3,
-                                              mModel.mQMIndData.data());
-
-    glm::mat4 modelInv = glm::inverse(mModel.mModelMat);
-    for (int ix = lower_x_idx; ix < upper_x_idx; ++ix) {
-        for (int iy = lower_y_idx; iy < upper_y_idx; ++iy) {
-            for (int iz = lower_z_idx; iz < upper_z_idx; ++iz) {
-                for (int ip = 0; ip < particleNumPerCell; ++ip) {
-                    float rx = float(rand()) / float(RAND_MAX);
-                    float ry = float(rand()) / float(RAND_MAX);
-                    float rz = float(rand()) / float(RAND_MAX);
-                    float node_x = ix * gap + rx * gap;
-                    float node_y = iy * gap + ry * gap;
-                    float node_z = iz * gap + rz * gap;
-                    glm::vec4 localPt = modelInv * glm::vec4(node_x, node_y, node_z, 1.f);
-                    double pt[3] = {localPt[0], localPt[1], localPt[2]};
-                    if (point_inside_mesh(pt, mMOBJ)){
-                        mParticles.particlePosVec.push_back(node_x);
-                        mParticles.particlePosVec.push_back(node_y);
-                        mParticles.particlePosVec.push_back(node_z);
-                    }
-                }
-            }
+        // Check the obj bounding box is within the grid.
+        if (mModel.mLowerBound[0] < 0.f || mModel.mLowerBound[1] < 0.f || mModel.mLowerBound[2] < 0.f){
+            std::cerr << "ERROR: OBJ lower bound is smaller than grid's origin." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
         }
-    }
+        float gridUpperBound = (nodeNumDim - 1) * gap;
+        if (mModel.mUpperBound[0] > gridUpperBound || mModel.mUpperBound[1] > gridUpperBound || mModel.mUpperBound[2] > gridUpperBound){
+            std::cerr << "ERROR: OBJ upper bound is out of the grid." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
 
-    mParticles.particleNum = mParticles.particlePosVec.size() / 3;
-    std::vector<double> volVec;
-    volVec.push_back(calVolmue(sampleModelPath));
-    mParticles.particleNumDiv.push_back(mParticles.particleNum);
+        // Get lower and upper grid index
+        int lower_x_idx = int(mModel.mLowerBound[0] / gap);
+        int lower_y_idx = int(mModel.mLowerBound[1] / gap);
+        int lower_z_idx = int(mModel.mLowerBound[2] / gap);
+        int upper_x_idx = int(mModel.mUpperBound[0] / gap);
+        int upper_y_idx = int(mModel.mUpperBound[1] / gap);
+        int upper_z_idx = int(mModel.mUpperBound[2] / gap);
 
-    destroy_mesh_object(mMOBJ);
-    initParticles(volVec);
-
-    std::cout << "Sampled model lower bound:"
-              << mModel.mLowerBound[0] << " "
-              << mModel.mLowerBound[1] << " "
-              << mModel.mLowerBound[2]<< std::endl;
-
-    std::cout << "Sampled model upper bound:"
-              << mModel.mUpperBound[0] << " "
-              << mModel.mUpperBound[1] << " "
-              << mModel.mUpperBound[2]<< std::endl;
-
-    showMemUsage();
-}
-
-
-MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
-                           std::string &sampleModelPath1, std::string &sampleModelPath2) {
-    // Init info.
-    this->max_dt = max_dt;
-    this->adp_dt = max_dt;
-    ext_gravity = -9.8;
-    FixedCorotatedMaterial mMaterial1(1e4, 0.4, 1.1);
-    FixedCorotatedMaterial mMaterial2(1e4, 0.4, 1.1);
-    mParticles.mMaterialVec.push_back(mMaterial1);
-    mParticles.mMaterialVec.push_back(mMaterial2);
-    current_frame = 0;
-    current_time = 0.0;
-
-    initGrid(gap, nodeNumDim);
-
-    // Load and sample model:
-    cudaError_t err = cudaSuccess;
-    model mModel1(sampleModelPath1, 1.f, false);
-    mModel1.setTransformation(glm::vec3(1.f),
-                              glm::vec3(12.0f, 6.5f, 5.f),
-                              35.f,
-                              glm::normalize(glm::vec3(1.f, 0.5f, -1.5f)));
-    model mModel2(sampleModelPath2, 1.f, false);
-    mModel2.setTransformation(glm::vec3(1.f, 2.f, 1.f),
-                              glm::vec3(13.0f, 2.1f, 6.f),
-                              0.f,
-                              glm::normalize(glm::vec3(1.f, 0.f, 0.f)));
-
-    // Check the obj bounding box is within the grid.
-    float gridUpperBound = (nodeNumDim - 1) * gap;
-    if (std::min(mModel1.mLowerBound[0], mModel2.mLowerBound[0]) < 0.f ||
-        std::min(mModel1.mLowerBound[1], mModel2.mLowerBound[1]) < 0.f ||
-        std::min(mModel1.mLowerBound[2], mModel2.mLowerBound[2]) < 0.f)
-    {
-        std::cerr << "ERROR: OBJ lower bound is smaller than grid's origin." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    if (std::max(mModel1.mUpperBound[0], mModel2.mUpperBound[0]) > gridUpperBound ||
-        std::max(mModel1.mUpperBound[1], mModel2.mUpperBound[1]) > gridUpperBound ||
-        std::max(mModel1.mUpperBound[2], mModel2.mUpperBound[2]) > gridUpperBound)
-    {
-        std::cerr << "ERROR: OBJ upper bound is out of the grid." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    // Get lower and upper grid index of model 1.
-    int lower1_x_idx = int(mModel1.mLowerBound[0] / gap);
-    int lower1_y_idx = int(mModel1.mLowerBound[1] / gap);
-    int lower1_z_idx = int(mModel1.mLowerBound[2] / gap);
-    int upper1_x_idx = int(mModel1.mUpperBound[0] / gap);
-    int upper1_y_idx = int(mModel1.mUpperBound[1] / gap);
-    int upper1_z_idx = int(mModel1.mUpperBound[2] / gap);
-
-    // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ1 = construct_mesh_object(mModel1.mQmVertData.size() / 3,
-                                              mModel1.mQmVertData.data(),
-                                              mModel1.mQMIndData.size() / 3,
-                                              mModel1.mQMIndData.data());
-
-    glm::mat4 model1Inv = glm::inverse(mModel1.mModelMat);
-    for (int ix = lower1_x_idx; ix < upper1_x_idx; ++ix) {
-        for (int iy = lower1_y_idx; iy < upper1_y_idx; ++iy) {
-            for (int iz = lower1_z_idx; iz < upper1_z_idx; ++iz) {
-                for (int ip = 0; ip < particleNumPerCell; ++ip) {
-                    float rx = float(rand()) / float(RAND_MAX);
-                    float ry = float(rand()) / float(RAND_MAX);
-                    float rz = float(rand()) / float(RAND_MAX);
-                    float node_x = ix * gap + rx * gap;
-                    float node_y = iy * gap + ry * gap;
-                    float node_z = iz * gap + rz * gap;
-                    glm::vec4 localPt = model1Inv * glm::vec4(node_x, node_y, node_z, 1.f);
-                    double pt[3] = {localPt[0], localPt[1], localPt[2]};
-                    if (point_inside_mesh(pt, mMOBJ1)){
-                        if (ix == (upper1_x_idx - 1)){
-                            int b1_r_pidx = mParticles.particlePosVec.size() / 3;
-                            idx_vec.push_back(b1_r_pidx);
+        // Put random particles into every grids between the lower and upper grid.
+        MeshObject* mMOBJ = construct_mesh_object(mModel.mQmVertData.size() / 3,
+                                                  mModel.mQmVertData.data(),
+                                                  mModel.mQMIndData.size() / 3,
+                                                  mModel.mQMIndData.data());
+        glm::mat4 modelInv = glm::inverse(mModel.mModelMat);
+        for (int ix = lower_x_idx; ix < upper_x_idx; ++ix) {
+            for (int iy = lower_y_idx; iy < upper_y_idx; ++iy) {
+                for (int iz = lower_z_idx; iz < upper_z_idx; ++iz) {
+                    for (int ip = 0; ip < particleNumPerCell; ++ip) {
+                        float rx = float(rand()) / float(RAND_MAX);
+                        float ry = float(rand()) / float(RAND_MAX);
+                        float rz = float(rand()) / float(RAND_MAX);
+                        float node_x = ix * gap + rx * gap;
+                        float node_y = iy * gap + ry * gap;
+                        float node_z = iz * gap + rz * gap;
+                        glm::vec4 localPt = modelInv * glm::vec4(node_x, node_y, node_z, 1.f);
+                        double pt[3] = {localPt[0], localPt[1], localPt[2]};
+                        if (point_inside_mesh(pt, mMOBJ)){
+                            tmpParticleGroup.particlePosVec.push_back(node_x);
+                            tmpParticleGroup.particlePosVec.push_back(node_y);
+                            tmpParticleGroup.particlePosVec.push_back(node_z);
                         }
-                        mParticles.particlePosVec.push_back(node_x);
-                        mParticles.particlePosVec.push_back(node_y);
-                        mParticles.particlePosVec.push_back(node_z);
                     }
                 }
             }
         }
+
+        tmpParticleGroup.particleNum = tmpParticleGroup.particlePosVec.size() / 3;
+        tmpParticleGroup.mParticleVolume = calVolmue(curInfo.objPath) / tmpParticleGroup.particleNum;
+        tmpParticleGroup.mParticleMass = curInfo.mMaterial.mDensity * tmpParticleGroup.mParticleVolume;
+
+        destroy_mesh_object(mMOBJ);
+        initParticles(tmpParticleGroup, curInfo);
+        min_bound_x = std::min(min_bound_x, double(mModel.mLowerBound[0]));
+        min_bound_y = std::min(min_bound_y, double(mModel.mLowerBound[1]));
+        min_bound_z = std::min(min_bound_z, double(mModel.mLowerBound[2]));
+        max_bound_x = std::max(max_bound_x, double(mModel.mUpperBound[0]));
+        max_bound_y = std::max(max_bound_y, double(mModel.mUpperBound[1]));
+        max_bound_z = std::max(max_bound_z, double(mModel.mUpperBound[2]));
+
+        mParticlesGroupsVec.push_back(tmpParticleGroup);
     }
 
-    /* 51984
-    std::cout << "The box right idx are:" << std::endl;
-    for (int i = 0; i < idx_vec.size(); ++i) {
-        std::cout << idx_vec[i] << std::endl;
-    }
-    */
-
-    int model1ParticleNum = mParticles.particlePosVec.size() / 3;
-
-    // Get lower and upper grid index of model 2.
-    int lower2_x_idx = int(mModel2.mLowerBound[0] / gap);
-    int lower2_y_idx = int(mModel2.mLowerBound[1] / gap);
-    int lower2_z_idx = int(mModel2.mLowerBound[2] / gap);
-    int upper2_x_idx = int(mModel2.mUpperBound[0] / gap);
-    int upper2_y_idx = int(mModel2.mUpperBound[1] / gap);
-    int upper2_z_idx = int(mModel2.mUpperBound[2] / gap);
-
-    // Put random particles into every grids between the lower and upper grid.
-    MeshObject* mMOBJ2 = construct_mesh_object(mModel2.mQmVertData.size() / 3,
-                                               mModel2.mQmVertData.data(),
-                                               mModel2.mQMIndData.size() / 3,
-                                               mModel2.mQMIndData.data());
-
-    glm::mat4 model2Inv = glm::inverse(mModel2.mModelMat);
-    for (int ix = lower2_x_idx; ix < upper2_x_idx; ++ix) {
-        for (int iy = lower2_y_idx; iy < upper2_y_idx; ++iy) {
-            for (int iz = lower2_z_idx; iz < upper2_z_idx; ++iz) {
-                for (int ip = 0; ip < particleNumPerCell; ++ip) {
-                    float rx = float(rand()) / float(RAND_MAX);
-                    float ry = float(rand()) / float(RAND_MAX);
-                    float rz = float(rand()) / float(RAND_MAX);
-                    float node_x = ix * gap + rx * gap;
-                    float node_y = iy * gap + ry * gap;
-                    float node_z = iz * gap + rz * gap;
-                    glm::vec4 localPt = model2Inv * glm::vec4(node_x, node_y, node_z, 1.f);
-                    double pt[3] = {localPt[0], localPt[1], localPt[2]};
-                    if (point_inside_mesh(pt, mMOBJ2)){
-                        mParticles.particlePosVec.push_back(node_x);
-                        mParticles.particlePosVec.push_back(node_y);
-                        mParticles.particlePosVec.push_back(node_z);
-                    }
-                }
-            }
-        }
-    }
-
-    mParticles.particleNum = mParticles.particlePosVec.size() / 3;
-    mParticles.particleNumDiv.push_back(model1ParticleNum);
-    mParticles.particleNumDiv.push_back(mParticles.particleNum - model1ParticleNum);
-
-    destroy_mesh_object(mMOBJ1);
-    destroy_mesh_object(mMOBJ2);
-    std::vector<double> volVec;
-    volVec.push_back(calVolmue(sampleModelPath1));
-    volVec.push_back(calVolmue(sampleModelPath2));
-    initParticles(volVec);
-
-#ifdef DEBUG
-    // Check particle volume.
-    double lastVol = mParticles.particleVolVec[0];
-    double lastMass = mParticles.particleMassVec[0];
-    std::cout << "vol0:" << lastVol << std::endl;
-    std::cout << "mass0:" << lastMass << std::endl;
-    for (int i = 0; i < mParticles.particleNum; ++i) {
-        if (lastVol != mParticles.particleVolVec[i]){
-            lastVol = mParticles.particleVolVec[i];
-            std::cout << "vol" << i+1 << ":" << lastVol << std::endl;
-        }
-        if (lastMass != mParticles.particleMassVec[i]){
-            lastMass = mParticles.particleMassVec[i];
-            std::cout << "mass" << i+1 << ":" << lastMass << std::endl;
-        }
-    }
-#endif
-
-    std::cout << "Sampled model lower bound:"
-              << std::min(mModel1.mLowerBound[0], mModel2.mLowerBound[0]) << " "
-              << std::min(mModel1.mLowerBound[1], mModel2.mLowerBound[1]) << " "
-              << std::min(mModel1.mLowerBound[2], mModel2.mLowerBound[2]) << std::endl;
-
-    std::cout << "Sampled model upper bound:"
-              << std::max(mModel1.mUpperBound[0], mModel2.mUpperBound[0]) << " "
-              << std::max(mModel1.mUpperBound[1], mModel2.mUpperBound[1]) << " "
-              << std::max(mModel1.mUpperBound[2], mModel2.mUpperBound[2]) << std::endl;
-
-    min_bound_x = std::min(mModel1.mLowerBound[0], mModel2.mLowerBound[0]) - DBL_EPSILON;
-    min_bound_y = std::min(mModel1.mLowerBound[1], mModel2.mLowerBound[1]) - DBL_EPSILON;
-    min_bound_z = std::min(mModel1.mLowerBound[2], mModel2.mLowerBound[2]) - DBL_EPSILON;
-    max_bound_x = std::max(mModel1.mUpperBound[0], mModel2.mUpperBound[0]) + DBL_EPSILON;
-    max_bound_y = std::max(mModel1.mUpperBound[1], mModel2.mUpperBound[1]) + DBL_EPSILON;
-    max_bound_z = std::max(mModel1.mUpperBound[2], mModel2.mUpperBound[2]) + DBL_EPSILON;
-
+    min_bound_x = min_bound_x - DBL_EPSILON;
+    min_bound_y = min_bound_y - DBL_EPSILON;
+    min_bound_z = min_bound_z - DBL_EPSILON;
+    max_bound_x = max_bound_x + DBL_EPSILON;
+    max_bound_y = max_bound_y + DBL_EPSILON;
+    max_bound_z = max_bound_z + DBL_EPSILON;
     showMemUsage();
 }
 
@@ -478,46 +295,47 @@ MPMSimulator::~MPMSimulator() {
     }
 
     // Free GRAM associated with Particles.
-    err = cudaFree(mParticles.pPosVecGRAM);
-    if (err != cudaSuccess){
-        std::cerr << "Free particle position error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i) {
+        err = cudaFree(mParticlesGroupsVec[i].pPosVecGRAM);
+        if (err != cudaSuccess){
+            std::cerr << "Free particle position error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        err = cudaFree(mParticlesGroupsVec[i].pVelVecGRAM);
+        if (err != cudaSuccess){
+            std::cerr << "Free particle velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        err = cudaFree(mParticlesGroupsVec[i].pAffineVelGRAM);
+        if (err != cudaSuccess){
+            std::cerr << "Free particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        err = cudaFree(mParticlesGroupsVec[i].pDeformationGradientDiffGRAM);
+        if (err != cudaSuccess){
+            std::cerr << "Free particle deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        err = cudaFree(mParticlesGroupsVec[i].pElasiticityDeformationGradientGRAM);
+        if (err != cudaSuccess){
+            std::cerr << "Free particle elasticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        if (mParticlesGroupsVec[i].mMaterial.mType == SNOW){
+            err = cudaFree(mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM);
+            if (err != cudaSuccess){
+                std::cerr << "Free particle plasticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+                exit(1);
+            }
+        }
+
     }
 
-    err = cudaFree(mParticles.pVelVecGRAM);
-    if (err != cudaSuccess){
-        std::cerr << "Free particle velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaFree(mParticles.pVolVecGRAM);
-    if (err != cudaSuccess){
-        std::cerr << "Free particle volume error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaFree(mParticles.pAffineVelGRAM);
-    if (err != cudaSuccess){
-        std::cerr << "Free particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaFree(mParticles.pDeformationGradientDiffGRAM);
-    if (err != cudaSuccess){
-        std::cerr << "Free particle deformation gradient difference error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-}
-
-void MPMSimulator::setVel(std::vector<double> &particleVelVec) {
-    mParticles.particleVelVec = particleVelVec;
-    cudaError_t err = cudaSuccess;
-    err = cudaMemcpy(mParticles.pVelVecGRAM,mParticles.particleVelVec.data(),
-                     mParticles.velVecByteSize, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess){
-        std::cerr << "Set Velocity memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
 }
 
 double MPMSimulator::calVolmue(std::string &place) {
@@ -530,3 +348,24 @@ double MPMSimulator::calVolmue(std::string &place) {
         return 3.1415926 * 4.0;
     }
 }
+
+int MPMSimulator::totalParticlesNum() {
+    int res = 0;
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i) {
+        res += mParticlesGroupsVec[i].particleNum;
+    }
+    return res;
+}
+
+void MPMSimulator::getGLParticlesPos(std::vector<float> &oPosVec) {
+    oPosVec.resize(totalParticlesNum() * 3);
+    int already_copy_num = 0;
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i) {
+        std::copy(mParticlesGroupsVec[i].particlePosVec.begin(),
+                  mParticlesGroupsVec[i].particlePosVec.end(),
+                  oPosVec.begin() + already_copy_num);
+        already_copy_num += (mParticlesGroupsVec[i].particleNum * 3);
+    }
+}
+
+

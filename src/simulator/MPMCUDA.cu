@@ -245,9 +245,9 @@ __device__ double BSplineInterpolation(const double xp[3], const double xi[3], c
            BSplineInterpolation1D((xp[2] - xi[2]) / h);
 }
 
-__global__ void P2G(unsigned int pNum,
-                    double* pPosVec, double* pMassVec, double* pVelVec, double* pDGVec,
-                    double* pVolVec, // double* pForceVec,
+__global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
+                    double* pPosVec, double* pVelVec,
+                    double* pEDGVec, double* pPDGVec,
                     double* pAffineVelVec,
                     double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, // int* gAttentionIdx,
                     unsigned int gNodeNumDim, double h, double mu, double lambda,
@@ -255,11 +255,11 @@ __global__ void P2G(unsigned int pNum,
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < pNum){
         double pos[3] = {pPosVec[i * 3], pPosVec[i * 3 + 1], pPosVec[i * 3 + 2]};
-        double m = pMassVec[i];
+        double m = pMass;
         double vel[3] = {pVelVec[i * 3], pVelVec[i * 3 + 1], pVelVec[i * 3 + 2]};
-        float tmpDeformationGradient[9] = {float(pDGVec[9 * i]), float(pDGVec[9 * i + 1]), float(pDGVec[9 * i + 2]),
-                                           float(pDGVec[9 * i + 3]), float(pDGVec[9 * i + 4]), float(pDGVec[9 * i + 5]),
-                                           float(pDGVec[9 * i + 6]), float(pDGVec[9 * i + 7]), float(pDGVec[9 * i + 8])};
+        float tmpDeformationGradient[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
+                                           float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
+                                           float(pEDGVec[9 * i + 6]), float(pEDGVec[9 * i + 7]), float(pEDGVec[9 * i + 8])};
         double tmpAffineVel[9] = {pAffineVelVec[9 * i], pAffineVelVec[9 * i + 1], pAffineVelVec[9 * i + 2],
                                   pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
                                   pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8]};
@@ -283,7 +283,7 @@ __global__ void P2G(unsigned int pNum,
         // MatMul3x3(stress, F_transpose, tmpMat);
         MatMul3x3(stress, F_transpose, tmpMat);
 
-        float mVol(pVolVec[i]);
+        float mVol(pVol);
         ScalarMatMul(mVol, tmpMat, tmpMat, 9);
         /*
         if (i == 1){
@@ -468,8 +468,10 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
     }
 }
 
-__global__ void InterpolateAndMove(unsigned int pNum, double dt,
-                                   double* pPosVec, double* pVelVec, double* pDGVec, double* pAffineVelVec,
+__global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
+                                   double* pPosVec, double* pVelVec,
+                                   double* pEDGVec, double* pPDGVec,
+                                   double* pAffineVelVec,
                                    double* pDGDiffVec,
                                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
                                    unsigned int gNodeNumDim, double h, double* gNodeVelVec){
@@ -579,9 +581,9 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
                 }
             }
         }
-        double Fp[9] = {pDGVec[9 * i], pDGVec[9 * i + 1], pDGVec[9 * i + 2],
-                        pDGVec[9 * i + 3], pDGVec[9 * i + 4], pDGVec[9 * i + 5],
-                        pDGVec[9 * i + 6], pDGVec[9 * i + 7], pDGVec[9 * i + 8]};
+        double Fp[9] = {pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
+                        pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
+                        pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]};
         double leftMat[9] = {1.0, 0.0, 0.0,
                               0.0, 1.0, 0.0,
                               0.0, 0.0, 1.0};
@@ -593,15 +595,15 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt,
         double tmp_Fp[9];
         memcpy(tmp_Fp, Fp, sizeof(double) * 9);
         MatMul3x3(leftMat, tmp_Fp, Fp);
-        pDGVec[9 * i] = Fp[0];
-        pDGVec[9 * i + 1] = Fp[1];
-        pDGVec[9 * i + 2] = Fp[2];
-        pDGVec[9 * i + 3] = Fp[3];
-        pDGVec[9 * i + 4] = Fp[4];
-        pDGVec[9 * i + 5] = Fp[5];
-        pDGVec[9 * i + 6] = Fp[6];
-        pDGVec[9 * i + 7] = Fp[7];
-        pDGVec[9 * i + 8] = Fp[8];
+        pEDGVec[9 * i] = Fp[0];
+        pEDGVec[9 * i + 1] = Fp[1];
+        pEDGVec[9 * i + 2] = Fp[2];
+        pEDGVec[9 * i + 3] = Fp[3];
+        pEDGVec[9 * i + 4] = Fp[4];
+        pEDGVec[9 * i + 5] = Fp[5];
+        pEDGVec[9 * i + 6] = Fp[6];
+        pEDGVec[9 * i + 7] = Fp[7];
+        pEDGVec[9 * i + 8] = Fp[8];
         double dgDet = Mat3x3Determinant(Fp);
         assert(dgDet > 0);
         if (dgDet > 1.0){
@@ -758,30 +760,33 @@ void MPMSimulator::step() {
 
     // 2. Transfer mass to the grid.
     // 3. Transfer velocity(Momentum) to the grid.
-    int pThreadsPerBlock = 256;
-    int pBlocksPerGrid = (mParticles.particleNum + pThreadsPerBlock - 1) / pThreadsPerBlock;
-    P2G<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
-                                            mParticles.pPosVecGRAM,
-                                            mParticles.pMassVecGRAM,
-                                            mParticles.pVelVecGRAM,
-                                            mParticles.pDeformationGradientGRAM,
-                                            mParticles.pVolVecGRAM,
-                                            // pForceVec,
-                                            mParticles.pAffineVelGRAM,
-                                            mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
-                                            // gAttentionIdx,
-                                            mGrid.nodeNumDim,
-                                            mGrid.h, mParticles.mMaterialVec[0].mMu, mParticles.mMaterialVec[0].mLambda,
-                                            mGrid.nodeMassVec,
-                                            mGrid.nodeVelVec,
-                                            mGrid.nodeForceVec);
-    cudaDeviceSynchronize();
-    err = cudaGetLastError();
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to launch P2G kernel (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i){
+        int pThreadsPerBlock = 128;
+        int pBlocksPerGrid = (mParticlesGroupsVec[i].particleNum + pThreadsPerBlock - 1) / pThreadsPerBlock;
+        P2G<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticlesGroupsVec[i].particleNum,
+                                                  mParticlesGroupsVec[i].mParticleMass,
+                                                  mParticlesGroupsVec[i].mParticleVolume,
+                                                  mParticlesGroupsVec[i].mMaterial.mType,
+                                                  mParticlesGroupsVec[i].pPosVecGRAM,
+                                                  mParticlesGroupsVec[i].pVelVecGRAM,
+                                                  mParticlesGroupsVec[i].pElasiticityDeformationGradientGRAM,
+                                                  mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM,
+                                                  mParticlesGroupsVec[i].pAffineVelGRAM,
+                                                  mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
+                                                  mGrid.nodeNumDim,
+                                                  mGrid.h, mParticlesGroupsVec[i].mMaterial.mMu, mParticlesGroupsVec[i].mMaterial.mLambda,
+                                                  mGrid.nodeMassVec,
+                                                  mGrid.nodeVelVec,
+                                                  mGrid.nodeForceVec);
+        cudaDeviceSynchronize();
+        err = cudaGetLastError();
+        if (err != cudaSuccess)
+        {
+            fprintf(stderr, "Failed to launch %d's P2G kernel (error code %s)!\n", i, cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
     }
+
 
 /*
 #ifdef DEBUG
@@ -899,64 +904,72 @@ void MPMSimulator::step() {
     // 5.5 Clean the velocity and affine velocity on the particles.
     // 6. Interpolate new velocity back to particles.
     // 7. Move particles.
-    err = cudaMemset(mParticles.pVelVecGRAM, 0, mParticles.velVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Clean particle velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMemset(mParticles.pAffineVelGRAM, 0, mParticles.affineVelVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Clean particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    std::fill(mParticles.particleVelVec.begin(), mParticles.particleVelVec.end(), 0.0);
-    InterpolateAndMove<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
-                                                             adp_dt,
-                                                             mParticles.pPosVecGRAM,
-                                                             mParticles.pVelVecGRAM,
-                                                             mParticles.pDeformationGradientGRAM,
-                                                             mParticles.pAffineVelGRAM,
-                                                             mParticles.pDeformationGradientDiffGRAM,
-                                                             mGrid.originCorner[0],
-                                                             mGrid.originCorner[1],
-                                                             mGrid.originCorner[2],
-                                                             mGrid.nodeNumDim,
-                                                             mGrid.h,
-                                                             mGrid.nodeVelVec);
-    cudaDeviceSynchronize();
-    err = cudaGetLastError();
-    if (err != cudaSuccess){
-        fprintf(stderr, "Failed to launch InterpolateAndMove kernel (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
+    double tmp_factor = 0.0;
+    double factor = 0.0;
+    for (int i = 0; i < mParticlesGroupsVec.size(); ++i){
+        int pThreadsPerBlock = 128;
+        int pBlocksPerGrid = (mParticlesGroupsVec[i].particleNum + pThreadsPerBlock - 1) / pThreadsPerBlock;
 
-    // Put particles' position and velocity back to RAM.
-    err = cudaMemcpy(mParticles.particlePosVec.data(), mParticles.pPosVecGRAM, mParticles.posVecByteSize, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy particle position memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMemcpy(mParticles.particleVelVec.data(), mParticles.pVelVecGRAM, mParticles.velVecByteSize, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy particle velocity memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
+        err = cudaMemset(mParticlesGroupsVec[i].pVelVecGRAM, 0, mParticlesGroupsVec[i].velVecByteSize);
+        if (err != cudaSuccess){
+            std::cerr << "Clean particle velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+        err = cudaMemset(mParticlesGroupsVec[i].pAffineVelGRAM, 0, mParticlesGroupsVec[i].affineVelVecByteSize);
+        if (err != cudaSuccess){
+            std::cerr << "Clean particle affine velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
 
-    // Time step control:
-    thrust::device_ptr<double> dev_ptr_start = thrust::device_pointer_cast(mParticles.pDeformationGradientDiffGRAM);
-    thrust::device_ptr<double> dev_ptr_end = thrust::device_pointer_cast(mParticles.pDeformationGradientDiffGRAM + mParticles.particleNum);
-    auto max_diff = thrust::max_element(dev_ptr_start, dev_ptr_end);
-    double tmp = *max_diff * *max_diff * *max_diff;
-    double factor = std::min(10.0, tmp);
+        InterpolateAndMove<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticlesGroupsVec[i].particleNum,
+                                                                 adp_dt,
+                                                                 mParticlesGroupsVec[i].mMaterial.mType,
+                                                                 mParticlesGroupsVec[i].pPosVecGRAM,
+                                                                 mParticlesGroupsVec[i].pVelVecGRAM,
+                                                                 mParticlesGroupsVec[i].pElasiticityDeformationGradientGRAM,
+                                                                 mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM,
+                                                                 mParticlesGroupsVec[i].pAffineVelGRAM,
+                                                                 mParticlesGroupsVec[i].pDeformationGradientDiffGRAM,
+                                                                 mGrid.originCorner[0],
+                                                                 mGrid.originCorner[1],
+                                                                 mGrid.originCorner[2],
+                                                                 mGrid.nodeNumDim,
+                                                                 mGrid.h,
+                                                                 mGrid.nodeVelVec);
+        cudaDeviceSynchronize();
+        err = cudaGetLastError();
+        if (err != cudaSuccess){
+            fprintf(stderr, "Failed to launch InterpolateAndMove kernel (error code %s)!\n", cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
+
+        // Put particles' position back to RAM.
+        err = cudaMemcpy(mParticlesGroupsVec[i].particlePosVec.data(),
+                         mParticlesGroupsVec[i].pPosVecGRAM,
+                         mParticlesGroupsVec[i].posVecByteSize,
+                         cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess){
+            std::cerr << "Copy particle position memory error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+
+        // Time step control:
+        thrust::device_ptr<double> dev_ptr_start = thrust::device_pointer_cast(mParticlesGroupsVec[i].pDeformationGradientDiffGRAM);
+        thrust::device_ptr<double> dev_ptr_end = thrust::device_pointer_cast(mParticlesGroupsVec[i].pDeformationGradientDiffGRAM + mParticlesGroupsVec[i].particleNum);
+        auto max_diff = thrust::max_element(dev_ptr_start, dev_ptr_end);
+        tmp_factor = std::max(*max_diff * *max_diff * *max_diff, tmp_factor);
+        factor = std::min(10.0, tmp_factor);
+    }
     adp_dt = max_dt / factor;
+
     // auto min_diff = thrust::min_element(dev_ptr_start, dev_ptr_end);
     // std::cout << "Max determinant:" << *max_diff << std::endl; //<< " Min determinant:" << *min_diff << std::endl;
 
 
 #ifdef DEBUG
     // Check whether the energy is consistent.
-    std::cout << "n+1 vel:[" << mParticles.particleVelVec[1 * 3] << " " << mParticles.particleVelVec[1 * 3 + 1] << " " << mParticles.particleVelVec[1 * 3 + 2] << "]" << std::endl;
-    std::cout << "n+1 pos:[" << mParticles.particlePosVec[1 * 3] << " " << mParticles.particlePosVec[1 * 3 + 1] << " " << mParticles.particlePosVec[1 * 3 + 2] << "]" << std::endl << std::endl;
+    // std::cout << "n+1 vel:[" << mParticles.particleVelVec[1 * 3] << " " << mParticles.particleVelVec[1 * 3 + 1] << " " << mParticles.particleVelVec[1 * 3 + 2] << "]" << std::endl;
+    // std::cout << "n+1 pos:[" << mParticles.particlePosVec[1 * 3] << " " << mParticles.particlePosVec[1 * 3 + 1] << " " << mParticles.particlePosVec[1 * 3 + 2] << "]" << std::endl << std::endl;
 /*
     double vel_energy_cur = 0.5 * 1.0 * (mParticles.particleVelVec[1] * mParticles.particleVelVec[1]);
     double vel_energy_diff = vel_energy_cur - vel_energy_init;

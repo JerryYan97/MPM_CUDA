@@ -9,12 +9,14 @@
 #include <array>
 #include <cuda_runtime.h>
 #include <iostream>
+#include <glm.hpp>
 #include "material/Elasiticity.cuh"
 
 class MeshObject;
 class FixedCorotatedMaterial;
 
 // In 3D
+/*
 struct ParticleGroup{
     unsigned int particleNum;
     std::vector<FixedCorotatedMaterial> mMaterialVec; // It may needs to be changed to a vector in the future.
@@ -27,14 +29,53 @@ struct ParticleGroup{
     double* pMassVecGRAM;
     double* pVelVecGRAM;
     double* pVolVecGRAM;
-    double* pDeformationGradientGRAM;
+    double* pElasiticityDeformationGradientGRAM;
+    double* pPlasiticityDeformationGradientGRAM;
     double* pAffineVelGRAM;
     double* pDeformationGradientDiffGRAM;
+    int* pParticleNumDivGRAM;
+    int* pParticleTypeGRAM;
+    double* pLambda0GRAM;
+    double* pMu0GRAM;
     size_t posVecByteSize;
     size_t massVecByteSize;
     size_t velVecByteSize;
     size_t volVecByteSize;
     size_t dgVecByteSize;
+    size_t affineVelVecByteSize;
+    size_t dgDiffVecByteSize;
+};
+*/
+
+struct ObjInitInfo{
+    std::array<double, 3> initVel;
+    glm::vec3 initTranslation;
+    glm::vec3 initRotationAxis;
+    glm::vec3 initScale;
+    float initRotationDegree;
+    std::string objPath;
+    Material mMaterial;
+};
+
+
+struct ParticleGroup{
+    unsigned int particleNum;
+    double mParticleMass;
+    double mParticleVolume;
+    Material mMaterial;
+    std::vector<double> particlePosVec;
+
+    double* pPosVecGRAM;
+    double* pVelVecGRAM;
+    double* pElasiticityDeformationGradientGRAM;
+    double* pPlasiticityDeformationGradientGRAM;
+    double* pAffineVelGRAM;
+    double* pDeformationGradientDiffGRAM;
+
+    size_t posVecByteSize;
+    size_t velVecByteSize;
+    size_t eDgVecByteSize;
+    size_t pDgVecByteSize;
     size_t affineVelVecByteSize;
     size_t dgDiffVecByteSize;
 };
@@ -68,28 +109,26 @@ private:
     void initGrid(double gap, unsigned int nodeNumDim);
     double calVolmue(std::string& place);
     void showMemUsage();
-    void initParticles(std::vector<double>& volVec);
+    void initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo);
 
 public:
     double adp_dt;
     double current_time;
     int current_frame;
 
-    ParticleGroup mParticles{};
+    // ParticleGroup mParticles{};
+    std::vector<ParticleGroup> mParticlesGroupsVec;
     Grid mGrid{};
+
     MPMSimulator(double gap,
                  double dt,
                  unsigned int nodeNumDim,
                  unsigned int particleNumPerCell,
-                 std::string& sampleModelPath);
-    MPMSimulator(double gap,
-                 double dt,
-                 unsigned int nodeNumDim,
-                 unsigned int particleNumPerCell,
-                 std::string &sampleModelPath1,
-                 std::string &sampleModelPath2);
-    void setVel(std::vector<double>& particleVelVec);
+                 std::vector<ObjInitInfo>& objInitInfoVec);
+
     void step();
+    int totalParticlesNum();
+    void getGLParticlesPos(std::vector<float>& oPosVec);
     ~MPMSimulator();
 };
 

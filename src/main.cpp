@@ -131,9 +131,50 @@ int main() {
 
     std::string obj1_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string obj2_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
+
+    std::vector<ObjInitInfo> mInfoVec;
+
     // model mModel(obj_path);
     // MPMSimulator mSim(0.1f, 1.0/10000.0, 200, 10, obj1_path, obj2_path);
-    MPMSimulator mSim(0.1f, 1.0/5000.0, 200, 10, obj1_path);
+
+    // Jello Cube Cylinder case:
+
+    ObjInitInfo mInfo1;
+    mInfo1.objPath = obj1_path;
+    mInfo1.initVel = std::array<double, 3>({0.0, -6.0, 0.0});
+    mInfo1.initRotationDegree = 35.f;
+    mInfo1.initScale = glm::vec3(1.f);
+    mInfo1.initTranslation = glm::vec3(5.f, 5.f, 5.f);
+    mInfo1.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
+    mInfo1.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
+    mInfoVec.push_back(mInfo1);
+
+
+    ObjInitInfo mInfo2;
+    mInfo2.objPath = obj2_path;
+    mInfo2.initVel = std::array<double, 3>({0.0, -1.0, 0.0});
+    mInfo2.initRotationDegree = 0.f;
+    mInfo2.initScale = glm::vec3(1.f, 2.f, 1.f);
+    mInfo2.initTranslation = glm::vec3(5.f, 2.f, 5.f);
+    mInfo2.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
+    mInfo2.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
+    mInfoVec.push_back(mInfo2);
+
+
+    // Jello cube collides boundary wall
+    /*
+    ObjInitInfo mInfo;
+    mInfo.objPath = obj1_path;
+    mInfo.initVel = std::array<double, 3>({0.0, -8.0, 0.0});
+    mInfo.initRotationDegree = 35.f;
+    mInfo.initScale = glm::vec3(1.f);
+    mInfo.initTranslation = glm::vec3(5.f, 4.f, 5.f);
+    mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
+    mInfo.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
+    mInfoVec.push_back(mInfo);
+    */
+
+    MPMSimulator mSim(0.1f, 1.0/5000.0, 100, 10, mInfoVec);
 
     // Jello cube collides case:
     /*
@@ -149,6 +190,7 @@ int main() {
     */
 
     // Jello cube collides cylinder case:
+    /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
         if (i < mSim.mParticles.particleNumDiv[0]){
@@ -158,15 +200,10 @@ int main() {
         }
     }
     mSim.setVel(initVel);
-
-    // Jello cube collides boundary wall
-    /*
-    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
-    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
-        initVel[3 * i] = -8.0;
-    }
-    mSim.setVel(initVel);
     */
+
+
+
 
     /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
@@ -178,8 +215,8 @@ int main() {
 
     // Init models
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
-    std::vector<float> insPos{mSim.mParticles.particlePosVec.begin(),
-                              mSim.mParticles.particlePosVec.end()};
+    std::vector<float> insPos;
+    mSim.getGLParticlesPos(insPos);
     InstanceModel mModel(instance_obj_path, insPos, 0.01f);
 
     float upperCorner[3] = {
@@ -224,7 +261,9 @@ int main() {
             // process = false;
         }
 
-        std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
+        // std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
+        std::vector<float> tmpParticlePos;
+        mSim.getGLParticlesPos(tmpParticlePos);
 
         mModel.updateInstanceModel(tmpParticlePos);
 
