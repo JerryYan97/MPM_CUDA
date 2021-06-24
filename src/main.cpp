@@ -132,6 +132,7 @@ int main() {
     std::string obj1_path = std::string(PROJ_PATH) + "/models/cube.obj";
     std::string obj2_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
     std::string obj3_path = std::string(PROJ_PATH) + "/models/sphere.obj";
+    std::string obj4_path = std::string(PROJ_PATH) + "/models/MPM2.obj";
 
     std::vector<ObjInitInfo> mInfoVec;
 
@@ -176,20 +177,21 @@ int main() {
     */
 
     // Snow sphere collides wall
-    /*
     ObjInitInfo mInfo;
-    mInfo.objPath = obj3_path;
-    mInfo.initVel = std::array<double, 3>({0.0, -2.0, 0.0});
+    mInfo.objPath = obj4_path;
+    mInfo.initVel = std::array<double, 3>({0.0, 0.0, 0.0});
     mInfo.initRotationDegree = 0.f;
     mInfo.initScale = glm::vec3(1.f);
-    mInfo.initTranslation = glm::vec3(5.f, 4.f, 5.f);
+    mInfo.initTranslation = glm::vec3(5.0f, 1.5f, 5.f);
     mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo.mMaterial = Material(5e3, 0.2, 1.0, SNOW);
+    mInfo.mMaterial = Material(5e3, 0.3, 0.8, SNOW);
     mInfoVec.push_back(mInfo);
 
-    MPMSimulator mSim(0.1f, 1.0/10000.0, 100, 8, mInfoVec);
-    */
+    MPMSimulator mSim(0.025f, 1.0/10000.0, 400, 10, mInfoVec);
+
+
     // Snow balls collides
+    /*
     ObjInitInfo mInfo1;
     mInfo1.objPath = obj3_path;
     mInfo1.initVel = std::array<double, 3>({-5.0, 0.0, 0.0});
@@ -197,21 +199,22 @@ int main() {
     mInfo1.initScale = glm::vec3(1.f);
     mInfo1.initTranslation = glm::vec3(7.f, 4.f, 5.f);
     mInfo1.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo1.mMaterial = Material(5e3, 0.3, 0.8, SNOW);
+    mInfo1.mMaterial = Material(5e3, 0.3, 400, SNOW);
     mInfoVec.push_back(mInfo1);
 
 
     ObjInitInfo mInfo2;
     mInfo2.objPath = obj3_path;
-    mInfo2.initVel = std::array<double, 3>({5.0, 0.0, 0.0});
+    mInfo2.initVel = std::array<double, 3>({20.0, 0.0, 0.0});
     mInfo2.initRotationDegree = 0.f;
-    mInfo2.initScale = glm::vec3(1.f);
+    mInfo2.initScale = glm::vec3(0.5f);
     mInfo2.initTranslation = glm::vec3(3.f, 4.f, 5.f);
     mInfo2.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo2.mMaterial = Material(5e3, 0.3, 0.8, SNOW);
+    mInfo2.mMaterial = Material(5e3, 0.3, 400, SNOW);
     mInfoVec.push_back(mInfo2);
 
-    MPMSimulator mSim(0.1f, 1.0/20000.0, 100, 10, mInfoVec);
+    MPMSimulator mSim(0.05f, 1.0/500.0, 200, 10, mInfoVec);
+    */
 
     // Jello cube collides case:
     /*

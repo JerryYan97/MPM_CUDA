@@ -16,37 +16,6 @@ class MeshObject;
 class FixedCorotatedMaterial;
 
 // In 3D
-/*
-struct ParticleGroup{
-    unsigned int particleNum;
-    std::vector<FixedCorotatedMaterial> mMaterialVec; // It may needs to be changed to a vector in the future.
-    std::vector<double> particlePosVec;
-    std::vector<double> particleMassVec;
-    std::vector<double> particleVelVec;
-    std::vector<double> particleVolVec;
-    std::vector<unsigned int> particleNumDiv;
-    double* pPosVecGRAM;
-    double* pMassVecGRAM;
-    double* pVelVecGRAM;
-    double* pVolVecGRAM;
-    double* pElasiticityDeformationGradientGRAM;
-    double* pPlasiticityDeformationGradientGRAM;
-    double* pAffineVelGRAM;
-    double* pDeformationGradientDiffGRAM;
-    int* pParticleNumDivGRAM;
-    int* pParticleTypeGRAM;
-    double* pLambda0GRAM;
-    double* pMu0GRAM;
-    size_t posVecByteSize;
-    size_t massVecByteSize;
-    size_t velVecByteSize;
-    size_t volVecByteSize;
-    size_t dgVecByteSize;
-    size_t affineVelVecByteSize;
-    size_t dgDiffVecByteSize;
-};
-*/
-
 struct ObjInitInfo{
     std::array<double, 3> initVel;
     glm::vec3 initTranslation;
@@ -86,10 +55,8 @@ struct Grid{
     std::array<double, 3> originCorner;
     double* nodeMassVec;
     double* nodeVelVec;
-    double* nodeForceVec; // Elastic force now.
     size_t massVecByteSize;
     size_t velVecByteSize;
-    size_t forceVecByteSize;
 };
 
 class MPMSimulator {
@@ -107,7 +74,6 @@ private:
     double max_bound_z;
 
     void initGrid(double gap, unsigned int nodeNumDim);
-    double calVolmue(std::string& place);
     void showMemUsage();
     void initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo);
 
@@ -116,7 +82,6 @@ public:
     double current_time;
     int current_frame;
 
-    // ParticleGroup mParticles{};
     std::vector<ParticleGroup> mParticlesGroupsVec;
     Grid mGrid{};
 

@@ -9,17 +9,6 @@
 #include <thrust/device_vector.h>
 #include "../../thirdparties/cudaSVD/svd3_cuda.h"
 
-template<class T>
-__forceinline__
-__device__ T clamp(const T x, const T lowerBound, const T upperBound){
-    if (x < lowerBound){
-        return lowerBound;
-    }else if (x > upperBound){
-        return upperBound;
-    }else{
-        return x;
-    }
-}
 
 template<class T>
 __device__ void Mat3x3Cofactor(const T* F, T* res){
@@ -194,6 +183,13 @@ __device__ void MatAdd(const T* m1, const T* m2, T* mAdd, int eleNum){
 }
 
 template<class T>
+__device__ void MatMin(const T* m1, const T* m2, T* mMin, int eleNum){
+    for (int i = 0; i < eleNum; ++i){
+        mMin[i] = m1[i] - m2[i];
+    }
+}
+
+template<class T>
 __forceinline__
 __device__ __host__ void MatVelMul3x3x3x1(const T* X, const T* V, T* R)
 {
@@ -222,6 +218,44 @@ __device__ void OuterProduct(const T* v1, const T* v2, T* res){
     res[6] = v1[2] * v2[0];
     res[7] = v1[2] * v2[1];
     res[8] = v1[2] * v2[2];
+}
+
+
+__device__ void kirchoff_FCR(const float* F, const float mu, const float lam, float* tau){
+    float U11, U12, U13, U21, U22, U23, U31, U32, U33;
+    float V11, V12, V13, V21, V22, V23, V31, V32, V33;
+    float S11, S22, S33;
+    PolarSVD(F[0], F[1], F[2], F[3], F[4], F[5], F[6], F[7], F[8],
+             U11, U12, U13, U21, U22, U23, U31, U32, U33,
+             S11, S22, S33,
+             V11, V12, V13, V21, V22, V23, V31, V32, V33);
+    float V[9] = {V11, V12, V13,
+                  V21, V22, V23,
+                  V31, V32, V33};
+    float U[9] = {U11, U12, U13,
+                  U21, U22, U23,
+                  U31, U32, U33};
+    float V_transpose[9] = {0.f};
+    MatTranspose(V, V_transpose);
+    float R[9] = {0.f};
+    MatMul3x3(U, V_transpose, R);
+    float F_min_R[9] = {0.f};
+    MatMin(F, R, F_min_R, 9);
+    float F_transpose[9] = {0.f};
+    MatTranspose(F, F_transpose);
+    float F_min_R_FT[9] = {0.f};
+    MatMul3x3(F_min_R, F_transpose, F_min_R_FT);
+    float tau_term1[9] = {0.f};
+    ScalarMatMul(2.f * mu, F_min_R_FT, tau_term1, 9);
+    float J = Mat3x3Determinant(F);
+    float tau_term2[9] = {0.f};
+    float I[9] = {
+            1.f, 0.f, 0.f,
+            0.f, 1.f, 0.f,
+            0.f, 0.f, 1.f
+    };
+    ScalarMatMul(lam * J * (J - 1.f), I, tau_term2, 9);
+    MatAdd(tau_term1, tau_term2, tau, 9);
 }
 
 
@@ -273,8 +307,8 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     double* pEDGVec, double* pPDGVec,
                     double* pAffineVelVec,
                     double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, // int* gAttentionIdx,
-                    unsigned int gNodeNumDim, double h, double mu, double lambda,
-                    double* gNodeMassVec, double* gNodeTmpMotVec, double* gElasticityForceVec){
+                    unsigned int gNodeNumDim, double h, double dt, double mu, double lambda,
+                    double* gNodeMassVec, double* gNodeTmpMotVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < pNum){
         double pos[3] = {pPosVec[i * 3], pPosVec[i * 3 + 1], pPosVec[i * 3 + 2]};
@@ -283,25 +317,12 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
         double tmpAffineVel[9] = {pAffineVelVec[9 * i], pAffineVelVec[9 * i + 1], pAffineVelVec[9 * i + 2],
                                   pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
                                   pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8]};
-        float tmpMat[9] = {0.f};
-
+        float tau[9] = {0.f};
         if (pType == JELLO){
             float tmpDeformationGradient[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
                                                float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
                                                float(pEDGVec[9 * i + 6]), float(pEDGVec[9 * i + 7]), float(pEDGVec[9 * i + 8])};
-            float stress[9] = {0.f};
-            FixedCorotatedPStress(tmpDeformationGradient[0], tmpDeformationGradient[1], tmpDeformationGradient[2],
-                                  tmpDeformationGradient[3], tmpDeformationGradient[4], tmpDeformationGradient[5],
-                                  tmpDeformationGradient[6], tmpDeformationGradient[7], tmpDeformationGradient[8],
-                                  float(mu), float(lambda),
-                                  stress[0], stress[1], stress[2],
-                                  stress[3], stress[4], stress[5],
-                                  stress[6], stress[7], stress[8]);
-            float F_transpose[9] = {0.f};
-            MatTranspose(tmpDeformationGradient, F_transpose);
-            MatMul3x3(stress, F_transpose, tmpMat);
-            float mVol(pVol);
-            ScalarMatMul(mVol, tmpMat, tmpMat, 9);
+            kirchoff_FCR(tmpDeformationGradient, float(mu), float(lambda), tau);
         }else if (pType == SNOW){
             float tmpEDG[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
                                float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
@@ -309,16 +330,13 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
             float tmpPDG[9] = {float(pPDGVec[9 * i]), float(pPDGVec[9 * i + 1]), float(pPDGVec[9 * i + 2]),
                                float(pPDGVec[9 * i + 3]), float(pPDGVec[9 * i + 4]), float(pPDGVec[9 * i + 5]),
                                float(pPDGVec[9 * i + 6]), float(pPDGVec[9 * i + 7]), float(pPDGVec[9 * i + 8])};
-            float stress[9] = {0.f};
 
             float Jp = Mat3x3Determinant(tmpPDG);
-            if (i == 1){
-                printf("Particle 1 Jp:%f \n", Jp);
-            }
-            float xi = 50.f;
+            float Je = Mat3x3Determinant(tmpEDG);
+            float xi = 10.f;
             float harding_coef = expf(xi * (1.f - Jp));
-            float snow_mu = mu * harding_coef;
-            float snow_lambda = lambda * harding_coef;
+            float snow_mu = float(mu) * harding_coef;
+            float snow_lambda = float(lambda) * harding_coef;
 
             /*
             FixedCorotatedPStress(tmpEDG[0], tmpEDG[1], tmpEDG[2],
@@ -329,19 +347,22 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                                   stress[3], stress[4], stress[5],
                                   stress[6], stress[7], stress[8]);
             */
-            FixedCorotatedPStress(tmpEDG[0], tmpEDG[1], tmpEDG[2],
-                                  tmpEDG[3], tmpEDG[4], tmpEDG[5],
-                                  tmpEDG[6], tmpEDG[7], tmpEDG[8],
-                                  snow_mu, snow_lambda,
-                                  stress[0], stress[1], stress[2],
-                                  stress[3], stress[4], stress[5],
-                                  stress[6], stress[7], stress[8]);
 
-            float F_transpose[9] = {0.f};
-            MatTranspose(tmpEDG, F_transpose);
-            MatMul3x3(stress, F_transpose, tmpMat);
-            float mVol(pVol);
-            ScalarMatMul(mVol, tmpMat, tmpMat, 9);
+            kirchoff_FCR(tmpEDG, snow_mu, snow_lambda, tau);
+
+            /*
+            if (i == 1){
+                printf("Particle 1 Jp:%f, Je:%f, hard coef:%f \n, stress:\n[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n\n",
+                       Jp, Je, harding_coef,
+                       stress[0], stress[1], stress[2],
+                       stress[3], stress[4], stress[5],
+                       stress[6], stress[7], stress[8]);
+            }
+
+            if (harding_coef < 1.f){
+                printf("Particle %d's hard coef:%f\n", i, harding_coef);
+            }
+            */
         }
 
 
@@ -433,10 +454,11 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     float tmpForce[3] = {0.f};
                     BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
                     float grad_wip_f[3] = {static_cast<float>(grad_wip[0]), static_cast<float>(grad_wip[1]), static_cast<float>(grad_wip[2])};
-                    MatVelMul3x3x3x1(tmpMat, grad_wip_f, tmpForce);
-                    atomicAdd(&gElasticityForceVec[3 * g_idx], -tmpForce[0]);
-                    atomicAdd(&gElasticityForceVec[3 * g_idx + 1], -tmpForce[1]);
-                    atomicAdd(&gElasticityForceVec[3 * g_idx + 2], -tmpForce[2]);
+                    MatVelMul3x3x3x1(tau, grad_wip_f, tmpForce);
+                    ScalarMatMul(-float(pVol), tmpForce, tmpForce, 3);
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx], dt * tmpForce[0]);
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 1], dt * tmpForce[1]);
+                    atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], dt * tmpForce[2]);
                     /*
                     if (i == 1){
                         printf("Particle %d contributes force to g_idx = %d:[%f, %f, %f]\n", i, g_idx, -tmpForce[0], -tmpForce[1], -tmpForce[2]);
@@ -483,7 +505,7 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
                           double upper_x, double upper_y, double upper_z,
                           double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
                           unsigned int gNodeNumDim, double h,
-                          double* gMassVec, double* gVelMotVec, double* gForceVec){
+                          double* gMassVec, double* gVelMotVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < gNum){
         double mass = gMassVec[i];
@@ -492,9 +514,6 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             gVelMotVec[3 * i] = 0.0;
             gVelMotVec[3 * i + 1] = 0.0;
             gVelMotVec[3 * i + 2] = 0.0;
-            gForceVec[3 * i] = 0.0;
-            gForceVec[3 * i + 1] = 0.0;
-            gForceVec[3 * i + 2] = 0.0;
         }
         else{
             // Calculate velocity from momentum.
@@ -505,11 +524,6 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             // Include gravity into velocity.
             gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] + ext_gravity * dt;
 
-            // Include elasticity force into velocity.
-            gVelMotVec[3 * i] += (dt * gForceVec[3 * i] / mass);
-            gVelMotVec[3 * i + 1] += (dt * gForceVec[3 * i + 1] / mass);
-            gVelMotVec[3 * i + 2] += (dt * gForceVec[3 * i + 2] / mass);
-
             // Deal with Boundary condition.
             int idx_x = i % int(gNodeNumDim);
             int idx_y = ((i - idx_x) / int(gNodeNumDim)) % int(gNodeNumDim);
@@ -517,9 +531,8 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             double grid_node_pos[3] = {gOriCorner_x + idx_x * h,
                                        gOriCorner_y + idx_y * h,
                                        gOriCorner_z + idx_z * h};
-            if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x ||
-                grid_node_pos[1] <= lower_y || grid_node_pos[1] >= upper_y ||
-                grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z){
+            if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x || grid_node_pos[1] <= lower_y ||
+                grid_node_pos[1] >= upper_y || grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z){
                 gVelMotVec[3 * i] = 0.0;
                 gVelMotVec[3 * i + 1] = 0.0;
                 gVelMotVec[3 * i + 2] = 0.0;
@@ -706,9 +719,10 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                     double(Vf[6]), double(Vf[7]), double(Vf[8]),
             };
 
-            Eta_star[0] = clamp(double(Etaf[0]), 0.99, 1.01);
-            Eta_star[4] = clamp(double(Etaf[4]), 0.99, 1.01);
-            Eta_star[8] = clamp(double(Etaf[8]), 0.99, 1.01);
+            //
+            Eta_star[0] = min(max(double(Etaf[0]), 1 - 8e-2), 1 + 2e-2);
+            Eta_star[4] = min(max(double(Etaf[4]), 1 - 8e-2), 1 + 2e-2);
+            Eta_star[8] = min(max(double(Etaf[8]), 1 - 8e-2), 1 + 2e-2);
 
             double V_transpose[9] = {0.0};
             MatTranspose(V, V_transpose);
@@ -720,6 +734,16 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
 
             double eF_nplus1_inv[9] = {0.0};
             Mat3x3Inv(eF_nplus1, eF_nplus1_inv);
+            double mat_check[9] = {0.0};
+            MatMul3x3(eF_nplus1, eF_nplus1_inv, mat_check);
+            /*
+            if (i == 1){
+                printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
+                       mat_check[0], mat_check[1], mat_check[2],
+                       mat_check[3], mat_check[4], mat_check[5],
+                       mat_check[6], mat_check[7], mat_check[8]);
+            }
+            */
 
             double pF_nplus1[9] = {0.0};
             double leftTmp2[9] = {0.0};
@@ -856,11 +880,6 @@ void MPMSimulator::step() {
         std::cerr << "Clean grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-    err = cudaMemset(mGrid.nodeForceVec, 0, mGrid.forceVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Clean grid force error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
 /*
 #ifdef DEBUG
     std::cout << "********* Frame " << current_frame << " starts **********" << std::endl << std::endl;
@@ -904,10 +923,9 @@ void MPMSimulator::step() {
                                                   mParticlesGroupsVec[i].pAffineVelGRAM,
                                                   mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
                                                   mGrid.nodeNumDim,
-                                                  mGrid.h, mParticlesGroupsVec[i].mMaterial.mMu, mParticlesGroupsVec[i].mMaterial.mLambda,
+                                                  mGrid.h, adp_dt, mParticlesGroupsVec[i].mMaterial.mMu, mParticlesGroupsVec[i].mMaterial.mLambda,
                                                   mGrid.nodeMassVec,
-                                                  mGrid.nodeVelVec,
-                                                  mGrid.nodeForceVec);
+                                                  mGrid.nodeVelVec);
         cudaDeviceSynchronize();
         err = cudaGetLastError();
         if (err != cudaSuccess)
@@ -1019,7 +1037,7 @@ void MPMSimulator::step() {
                                                     mGrid.originCorner[2] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
                                                     mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
                                                     mGrid.nodeNumDim, mGrid.h,
-                                                    mGrid.nodeMassVec, mGrid.nodeVelVec, mGrid.nodeForceVec);
+                                                    mGrid.nodeMassVec, mGrid.nodeVelVec);
     cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess){
@@ -1090,7 +1108,7 @@ void MPMSimulator::step() {
         tmp_factor = std::max(*max_diff * *max_diff * *max_diff, tmp_factor);
         factor = std::min(10.0, tmp_factor);
     }
-    adp_dt = max_dt / factor;
+    // adp_dt = max_dt / factor;
 
     // auto min_diff = thrust::min_element(dev_ptr_start, dev_ptr_end);
     // std::cout << "Max determinant:" << *max_diff << std::endl; //<< " Min determinant:" << *min_diff << std::endl;

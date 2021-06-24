@@ -117,11 +117,9 @@ void MPMSimulator::initGrid(double gap, unsigned int nodeNumDim) {
     mGrid.originCorner = {0.0, 0.0, 0.0};
     mGrid.massVecByteSize = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim * sizeof(double);
     mGrid.velVecByteSize = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim * sizeof(double) * 3;
-    mGrid.forceVecByteSize = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim * sizeof(double) * 3;
 
     std::cout << "Grid mass uses GRAM and RAM:" << float(mGrid.massVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
     std::cout << "Grid vel uses GRAM and RAM:" << float(mGrid.velVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
-    std::cout << "Grid force uses GRAM and RAM:" << float(mGrid.forceVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
 
     err = cudaMalloc((void **)&mGrid.nodeMassVec, mGrid.massVecByteSize);
     if(err != cudaSuccess){
@@ -131,11 +129,6 @@ void MPMSimulator::initGrid(double gap, unsigned int nodeNumDim) {
     err = cudaMalloc((void **)&mGrid.nodeVelVec, mGrid.velVecByteSize);
     if (err != cudaSuccess){
         std::cerr << "Allocate grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMalloc((void **)&mGrid.nodeForceVec, mGrid.forceVecByteSize);
-    if (err != cudaSuccess){
-        std::cerr << "Allocate grid force error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 }
@@ -224,6 +217,7 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
                                                   mModel.mQMIndData.size() / 3,
                                                   mModel.mQMIndData.data());
         glm::mat4 modelInv = glm::inverse(mModel.mModelMat);
+        int occ_blocks_num = 0;
         for (int ix = lower_x_idx; ix < upper_x_idx; ++ix) {
             for (int iy = lower_y_idx; iy < upper_y_idx; ++iy) {
                 for (int iz = lower_z_idx; iz < upper_z_idx; ++iz) {
@@ -237,6 +231,7 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
                         glm::vec4 localPt = modelInv * glm::vec4(node_x, node_y, node_z, 1.f);
                         double pt[3] = {localPt[0], localPt[1], localPt[2]};
                         if (point_inside_mesh(pt, mMOBJ)){
+                            ++occ_blocks_num;
                             tmpParticleGroup.particlePosVec.push_back(node_x);
                             tmpParticleGroup.particlePosVec.push_back(node_y);
                             tmpParticleGroup.particlePosVec.push_back(node_z);
@@ -247,7 +242,7 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
         }
 
         tmpParticleGroup.particleNum = tmpParticleGroup.particlePosVec.size() / 3;
-        tmpParticleGroup.mParticleVolume = calVolmue(curInfo.objPath) / tmpParticleGroup.particleNum;
+        tmpParticleGroup.mParticleVolume = occ_blocks_num * (gap * gap * gap) / tmpParticleGroup.particleNum;
         tmpParticleGroup.mParticleMass = curInfo.mMaterial.mDensity * tmpParticleGroup.mParticleVolume;
 
         destroy_mesh_object(mMOBJ);
@@ -285,12 +280,6 @@ MPMSimulator::~MPMSimulator() {
     err = cudaFree(mGrid.nodeVelVec);
     if (err != cudaSuccess){
         std::cerr << "Free grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    err = cudaFree(mGrid.nodeForceVec);
-    if (err != cudaSuccess){
-        std::cerr << "Free grid Force error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
 
@@ -336,22 +325,6 @@ MPMSimulator::~MPMSimulator() {
 
     }
 
-}
-
-double MPMSimulator::calVolmue(std::string &place) {
-    std::string cube_path = std::string(PROJ_PATH) + "/models/cube.obj";
-    std::string cylinder_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
-    std::string sphere_path = std::string(PROJ_PATH) + "/models/sphere.obj";
-
-    if (place == cube_path){
-        return 2.0 * 2.0 *  2.0; // For cube
-    }
-    if (place == cylinder_path){
-        return 3.1415926 * 4.0;
-    }
-    if (place == sphere_path){
-        return 3.1415926;
-    }
 }
 
 int MPMSimulator::totalParticlesNum() {
