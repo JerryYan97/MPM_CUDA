@@ -40,6 +40,7 @@ struct ParticleGroup{
     double* pPlasiticityDeformationGradientGRAM;
     double* pAffineVelGRAM;
     double* pDeformationGradientDiffGRAM;
+    double* pJVecGRAM;
 
     size_t posVecByteSize;
     size_t velVecByteSize;
@@ -47,6 +48,7 @@ struct ParticleGroup{
     size_t pDgVecByteSize;
     size_t affineVelVecByteSize;
     size_t dgDiffVecByteSize;
+    size_t JVecByteSize;
 };
 
 struct Grid{

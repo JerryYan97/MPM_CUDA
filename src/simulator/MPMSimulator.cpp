@@ -27,11 +27,7 @@ void MPMSimulator::initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo
 
     initPG.posVecByteSize = initPG.particleNum * 3 * sizeof(double);
     initPG.velVecByteSize = initPG.particleNum * 3 * sizeof(double);
-    if (initObjInfo.mMaterial.mType == SNOW){
-        initPG.pDgVecByteSize = initPG.particleNum * 9 * sizeof(double);
-    }else{
-        initPG.pDgVecByteSize = 0;
-    }
+    initPG.pDgVecByteSize = 0;
     initPG.eDgVecByteSize = initPG.particleNum * 9 * sizeof(double);
     initPG.affineVelVecByteSize = initPG.particleNum * 9 * sizeof(double);
     initPG.dgDiffVecByteSize = initPG.particleNum * sizeof(double);
@@ -73,6 +69,7 @@ void MPMSimulator::initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo
     }
 
     if (initObjInfo.mMaterial.mType == SNOW){
+        initPG.pDgVecByteSize = initPG.particleNum * 9 * sizeof(double);
         err = cudaMalloc((void **)&initPG.pPlasiticityDeformationGradientGRAM, initPG.pDgVecByteSize);
         if (err != cudaSuccess){
             std::cerr << "Allocate particles plasiticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
@@ -82,6 +79,19 @@ void MPMSimulator::initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo
                          initPG.pDgVecByteSize, cudaMemcpyHostToDevice);
         if (err != cudaSuccess){
             std::cerr << "Init deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+    } else if (initObjInfo.mMaterial.mType == WATER){
+        initPG.JVecByteSize = initPG.particleNum * sizeof(double);
+        err = cudaMalloc((void **)&initPG.pJVecGRAM, initPG.JVecByteSize);
+        if (err != cudaSuccess){
+            std::cerr << "Allocate water particles' J error." << std::endl << cudaGetErrorString(err) << std::endl;
+            exit(1);
+        }
+        std::vector<double> JVecInit(initPG.particleNum, 1.0);
+        err = cudaMemcpy(initPG.pJVecGRAM, JVecInit.data(), initPG.JVecByteSize, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess){
+            std::cerr << "Set water particles' J error." << std::endl << cudaGetErrorString(err) << std::endl;
             exit(1);
         }
     }
@@ -319,6 +329,12 @@ MPMSimulator::~MPMSimulator() {
             err = cudaFree(mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM);
             if (err != cudaSuccess){
                 std::cerr << "Free particle plasticity deformation gradient error." << std::endl << cudaGetErrorString(err) << std::endl;
+                exit(1);
+            }
+        }else if (mParticlesGroupsVec[i].mMaterial.mType == WATER){
+            err = cudaFree(mParticlesGroupsVec[i].pJVecGRAM);
+            if (err != cudaSuccess){
+                std::cerr << "Free water particle J vector error." << std::endl << cudaGetErrorString(err) << std::endl;
                 exit(1);
             }
         }

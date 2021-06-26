@@ -9,6 +9,11 @@
 #include <thrust/device_vector.h>
 #include "../../thirdparties/cudaSVD/svd3_cuda.h"
 
+template<class T>
+__forceinline__
+__device__ T Dot(const T* V1, const T* V2){
+    return V1[0] * V2[0] + V1[1] * V2[1] + V1[2] * V2[2];
+}
 
 template<class T>
 __device__ void Mat3x3Cofactor(const T* F, T* res){
@@ -304,7 +309,7 @@ __device__ double BSplineInterpolation(const double xp[3], const double xi[3], c
 
 __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     double* pPosVec, double* pVelVec,
-                    double* pEDGVec, double* pPDGVec,
+                    double* pEDGVec, double* pPDGVec, double* pJVec,
                     double* pAffineVelVec,
                     double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, // int* gAttentionIdx,
                     unsigned int gNodeNumDim, double h, double dt, double mu, double lambda,
@@ -318,6 +323,8 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                                   pAffineVelVec[9 * i + 3], pAffineVelVec[9 * i + 4], pAffineVelVec[9 * i + 5],
                                   pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8]};
         float tau[9] = {0.f};
+        double waterPressure = 0.0;
+        double waterJ = 0.0;
         if (pType == JELLO){
             float tmpDeformationGradient[9] = {float(pEDGVec[9 * i]), float(pEDGVec[9 * i + 1]), float(pEDGVec[9 * i + 2]),
                                                float(pEDGVec[9 * i + 3]), float(pEDGVec[9 * i + 4]), float(pEDGVec[9 * i + 5]),
@@ -363,6 +370,9 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                 printf("Particle %d's hard coef:%f\n", i, harding_coef);
             }
             */
+        } else if (pType == WATER){
+            waterJ = pJVec[i];
+            waterPressure = 2.51 * (1.0 / pow(waterJ, 7.0) - 1.0);
         }
 
 
@@ -451,11 +461,19 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
 
                     // Transfer elasticity force to grid.
                     double grad_wip[3] = {0.0};
-                    float tmpForce[3] = {0.f};
                     BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
                     float grad_wip_f[3] = {static_cast<float>(grad_wip[0]), static_cast<float>(grad_wip[1]), static_cast<float>(grad_wip[2])};
-                    MatVelMul3x3x3x1(tau, grad_wip_f, tmpForce);
-                    ScalarMatMul(-float(pVol), tmpForce, tmpForce, 3);
+                    float tmpForce[3] = {0.f};
+                    if (pType == SNOW || pType == JELLO){
+                        MatVelMul3x3x3x1(tau, grad_wip_f, tmpForce);
+                        ScalarMatMul(-float(pVol), tmpForce, tmpForce, 3);
+                    }else if (pType == WATER){
+                        auto scalar_terms = static_cast<float>(pVol * waterPressure * waterJ);
+                        ScalarMatMul(scalar_terms, grad_wip_f, tmpForce, 3);
+                    }else{
+                        printf("ERROR: The type of particle cannot be determined.");
+                    }
+
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx], dt * tmpForce[0]);
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx + 1], dt * tmpForce[1]);
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], dt * tmpForce[2]);
@@ -531,19 +549,24 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             double grid_node_pos[3] = {gOriCorner_x + idx_x * h,
                                        gOriCorner_y + idx_y * h,
                                        gOriCorner_z + idx_z * h};
+            /*
             if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x || grid_node_pos[1] <= lower_y ||
                 grid_node_pos[1] >= upper_y || grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z){
                 gVelMotVec[3 * i] = 0.0;
                 gVelMotVec[3 * i + 1] = 0.0;
                 gVelMotVec[3 * i + 2] = 0.0;
             }
+            */
+            if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x) gVelMotVec[3 * i] = 0.0;
+            if (grid_node_pos[1] <= lower_y || grid_node_pos[1] >= upper_y) gVelMotVec[3 * i + 1] = 0.0;
+            if (grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z) gVelMotVec[3 * i + 2] = 0.0;
         }
     }
 }
 
 __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                                    double* pPosVec, double* pVelVec,
-                                   double* pEDGVec, double* pPDGVec,
+                                   double* pEDGVec, double* pPDGVec, double* pJVec,
                                    double* pAffineVelVec,
                                    double* pDGDiffVec,
                                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
@@ -565,6 +588,7 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                 pAffineVelVec[9 * i + 6], pAffineVelVec[9 * i + 7], pAffineVelVec[9 * i + 8],
         };
 
+        double sum_vi_gradWip_dot = 0.0;
         for (int idx_x_offset = 0; idx_x_offset < 3; ++idx_x_offset){
             for (int idx_y_offset = 0; idx_y_offset < 3; ++idx_y_offset){
                 for (int idx_z_offset = 0; idx_z_offset < 3; ++idx_z_offset){
@@ -599,6 +623,11 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                     };
                     MatAdd(prev_affine_vel, acc_term, res_affine_vel, 9);
 
+                    // Calculate dot product sum for water J update
+                    double grad_wip[3] = {0.0};
+                    BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
+                    sum_vi_gradWip_dot += Dot(gVel, grad_wip);
+
                     t_vel_x += gVel[0];
                     t_vel_y += gVel[1];
                     t_vel_z += gVel[2];
@@ -619,167 +648,171 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
         pAffineVelVec[9 * i + 7] = res_affine_vel[7];
         pAffineVelVec[9 * i + 8] = res_affine_vel[8];
 
-        // Update deformation gradient
-        double grad_v[9] = {0.0};
-        for (int idx_x_offset = 0; idx_x_offset < 3; ++idx_x_offset){
-            for (int idx_y_offset = 0; idx_y_offset < 3; ++idx_y_offset){
-                for (int idx_z_offset = 0; idx_z_offset < 3; ++idx_z_offset){
-                    int idx_x = b_idx_x + idx_x_offset;
-                    int idx_y = b_idx_y + idx_y_offset;
-                    int idx_z = b_idx_z + idx_z_offset;
-                    double b_pos[3] = {gOriCorner_x + idx_x * h,
-                                       gOriCorner_y + idx_y * h,
-                                       gOriCorner_z + idx_z * h};
-                    int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
-                    assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
-                    assert(g_idx >= 0);
+        if (pType == SNOW || pType == JELLO){
+            // Update deformation gradient
+            double grad_v[9] = {0.0};
+            for (int idx_x_offset = 0; idx_x_offset < 3; ++idx_x_offset){
+                for (int idx_y_offset = 0; idx_y_offset < 3; ++idx_y_offset){
+                    for (int idx_z_offset = 0; idx_z_offset < 3; ++idx_z_offset){
+                        int idx_x = b_idx_x + idx_x_offset;
+                        int idx_y = b_idx_y + idx_y_offset;
+                        int idx_z = b_idx_z + idx_z_offset;
+                        double b_pos[3] = {gOriCorner_x + idx_x * h,
+                                           gOriCorner_y + idx_y * h,
+                                           gOriCorner_z + idx_z * h};
+                        int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
+                        assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
+                        assert(g_idx >= 0);
 
-                    double grad_wip[3] = {0.0};
-                    BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
+                        double grad_wip[3] = {0.0};
+                        BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
 
-                    double vi[3] = {gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]};
+                        double vi[3] = {gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]};
 
-                    double add_mat[9] = {0.0};
-                    OuterProduct(vi, grad_wip, add_mat);
+                        double add_mat[9] = {0.0};
+                        OuterProduct(vi, grad_wip, add_mat);
 
-                    double tmp_grad_v[9];
-                    memcpy(tmp_grad_v, grad_v, sizeof(double) * 9);
-                    MatAdd(tmp_grad_v, add_mat, grad_v, 9);
+                        double tmp_grad_v[9];
+                        memcpy(tmp_grad_v, grad_v, sizeof(double) * 9);
+                        MatAdd(tmp_grad_v, add_mat, grad_v, 9);
+                    }
                 }
             }
-        }
-
-        double leftMat[9] = {1.0, 0.0, 0.0,
-                             0.0, 1.0, 0.0,
-                             0.0, 0.0, 1.0};
-        double tmp_leftMat[9] = {1.0, 0.0, 0.0,
+            double leftMat[9] = {1.0, 0.0, 0.0,
                                  0.0, 1.0, 0.0,
                                  0.0, 0.0, 1.0};
-        ScalarMatMul(dt, grad_v, grad_v, 9);
-        MatAdd(tmp_leftMat, grad_v, leftMat, 9);
+            double tmp_leftMat[9] = {1.0, 0.0, 0.0,
+                                     0.0, 1.0, 0.0,
+                                     0.0, 0.0, 1.0};
+            ScalarMatMul(dt, grad_v, grad_v, 9);
+            MatAdd(tmp_leftMat, grad_v, leftMat, 9);
+            if (pType == JELLO){
+                double Fp[9] = {pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
+                                pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
+                                pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]};
 
-        if (pType == JELLO){
-            double Fp[9] = {pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
-                            pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
-                            pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]};
+                double tmp_Fp[9];
+                memcpy(tmp_Fp, Fp, sizeof(double) * 9);
+                MatMul3x3(leftMat, tmp_Fp, Fp);
+                pEDGVec[9 * i] = Fp[0];
+                pEDGVec[9 * i + 1] = Fp[1];
+                pEDGVec[9 * i + 2] = Fp[2];
+                pEDGVec[9 * i + 3] = Fp[3];
+                pEDGVec[9 * i + 4] = Fp[4];
+                pEDGVec[9 * i + 5] = Fp[5];
+                pEDGVec[9 * i + 6] = Fp[6];
+                pEDGVec[9 * i + 7] = Fp[7];
+                pEDGVec[9 * i + 8] = Fp[8];
+                double dgDet = Mat3x3Determinant(Fp);
+                assert(dgDet > 0);
+                if (dgDet > 1.0){
+                    pDGDiffVec[i] = dgDet;
+                }else{
+                    pDGDiffVec[i] = 1.0 / dgDet;
+                }
+            }else if (pType == SNOW){
+                double eF_n[9] = {
+                        pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
+                        pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
+                        pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]
+                };
+                double pF_n[9] = {
+                        pPDGVec[9 * i], pPDGVec[9 * i + 1], pPDGVec[9 * i + 2],
+                        pPDGVec[9 * i + 3], pPDGVec[9 * i + 4], pPDGVec[9 * i + 5],
+                        pPDGVec[9 * i + 6], pPDGVec[9 * i + 7], pPDGVec[9 * i + 8]
+                };
+                double eF_nplus1_trial[9] = {0.0};
+                MatMul3x3(leftMat, eF_n, eF_nplus1_trial);
 
-            double tmp_Fp[9];
-            memcpy(tmp_Fp, Fp, sizeof(double) * 9);
-            MatMul3x3(leftMat, tmp_Fp, Fp);
-            pEDGVec[9 * i] = Fp[0];
-            pEDGVec[9 * i + 1] = Fp[1];
-            pEDGVec[9 * i + 2] = Fp[2];
-            pEDGVec[9 * i + 3] = Fp[3];
-            pEDGVec[9 * i + 4] = Fp[4];
-            pEDGVec[9 * i + 5] = Fp[5];
-            pEDGVec[9 * i + 6] = Fp[6];
-            pEDGVec[9 * i + 7] = Fp[7];
-            pEDGVec[9 * i + 8] = Fp[8];
-            double dgDet = Mat3x3Determinant(Fp);
-            assert(dgDet > 0);
-            if (dgDet > 1.0){
+                float Uf[9] = {0.f};
+                float Vf[9] = {0.f};
+                float Etaf[9] = {0.f};
+                double Eta_star[9] = {0.0};
+                PolarSVD(float(eF_nplus1_trial[0]), float(eF_nplus1_trial[1]), float(eF_nplus1_trial[2]),
+                         float(eF_nplus1_trial[3]), float(eF_nplus1_trial[4]), float(eF_nplus1_trial[5]),
+                         float(eF_nplus1_trial[6]), float(eF_nplus1_trial[7]), float(eF_nplus1_trial[8]),
+                         Uf[0], Uf[1], Uf[2], Uf[3], Uf[4], Uf[5], Uf[6], Uf[7], Uf[8],
+                         Etaf[0], Etaf[4], Etaf[8],
+                         Vf[0], Vf[1], Vf[2], Vf[3], Vf[4], Vf[5], Vf[6], Vf[7], Vf[8]);
+
+                double U[9] = {
+                        double(Uf[0]), double(Uf[1]), double(Uf[2]),
+                        double(Uf[3]), double(Uf[4]), double(Uf[5]),
+                        double(Uf[6]), double(Uf[7]), double(Uf[8]),
+                };
+
+                double V[9] = {
+                        double(Vf[0]), double(Vf[1]), double(Vf[2]),
+                        double(Vf[3]), double(Vf[4]), double(Vf[5]),
+                        double(Vf[6]), double(Vf[7]), double(Vf[8]),
+                };
+
+                //
+                Eta_star[0] = min(max(double(Etaf[0]), 1 - 8e-2), 1 + 2e-2);
+                Eta_star[4] = min(max(double(Etaf[4]), 1 - 8e-2), 1 + 2e-2);
+                Eta_star[8] = min(max(double(Etaf[8]), 1 - 8e-2), 1 + 2e-2);
+
+                double V_transpose[9] = {0.0};
+                MatTranspose(V, V_transpose);
+
+                double eF_nplus1[9] = {0.0};
+                double leftTmp[9] = {0.0};
+                MatMul3x3(U, Eta_star, leftTmp);
+                MatMul3x3(leftTmp, V_transpose, eF_nplus1);
+
+                double eF_nplus1_inv[9] = {0.0};
+                Mat3x3Inv(eF_nplus1, eF_nplus1_inv);
+                double mat_check[9] = {0.0};
+                MatMul3x3(eF_nplus1, eF_nplus1_inv, mat_check);
+                /*
+                if (i == 1){
+                    printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
+                           mat_check[0], mat_check[1], mat_check[2],
+                           mat_check[3], mat_check[4], mat_check[5],
+                           mat_check[6], mat_check[7], mat_check[8]);
+                }
+                */
+
+                double pF_nplus1[9] = {0.0};
+                double leftTmp2[9] = {0.0};
+                MatMul3x3(eF_nplus1_inv, eF_nplus1_trial, leftTmp2);
+                MatMul3x3(leftTmp2, pF_n, pF_nplus1);
+
+                pEDGVec[9 * i] = eF_nplus1[0];
+                pEDGVec[9 * i + 1] = eF_nplus1[1];
+                pEDGVec[9 * i + 2] = eF_nplus1[2];
+                pEDGVec[9 * i + 3] = eF_nplus1[3];
+                pEDGVec[9 * i + 4] = eF_nplus1[4];
+                pEDGVec[9 * i + 5] = eF_nplus1[5];
+                pEDGVec[9 * i + 6] = eF_nplus1[6];
+                pEDGVec[9 * i + 7] = eF_nplus1[7];
+                pEDGVec[9 * i + 8] = eF_nplus1[8];
+
+                pPDGVec[9 * i] = pF_nplus1[0];
+                pPDGVec[9 * i + 1] = pF_nplus1[1];
+                pPDGVec[9 * i + 2] = pF_nplus1[2];
+                pPDGVec[9 * i + 3] = pF_nplus1[3];
+                pPDGVec[9 * i + 4] = pF_nplus1[4];
+                pPDGVec[9 * i + 5] = pF_nplus1[5];
+                pPDGVec[9 * i + 6] = pF_nplus1[6];
+                pPDGVec[9 * i + 7] = pF_nplus1[7];
+                pPDGVec[9 * i + 8] = pF_nplus1[8];
+
+                double dgDet = 0.0;
+                double pdgDet = Mat3x3Determinant(pF_nplus1);
+                assert(pdgDet > 0);
+                if (pdgDet > 1.0){
+                    dgDet = max(dgDet, pdgDet);
+                }else{
+                    dgDet = max(dgDet, 1.0 / pdgDet);
+                }
                 pDGDiffVec[i] = dgDet;
-            }else{
-                pDGDiffVec[i] = 1.0 / dgDet;
             }
-        }else if (pType == SNOW){
-            double eF_n[9] = {
-                    pEDGVec[9 * i], pEDGVec[9 * i + 1], pEDGVec[9 * i + 2],
-                    pEDGVec[9 * i + 3], pEDGVec[9 * i + 4], pEDGVec[9 * i + 5],
-                    pEDGVec[9 * i + 6], pEDGVec[9 * i + 7], pEDGVec[9 * i + 8]
-            };
-            double pF_n[9] = {
-                    pPDGVec[9 * i], pPDGVec[9 * i + 1], pPDGVec[9 * i + 2],
-                    pPDGVec[9 * i + 3], pPDGVec[9 * i + 4], pPDGVec[9 * i + 5],
-                    pPDGVec[9 * i + 6], pPDGVec[9 * i + 7], pPDGVec[9 * i + 8]
-            };
-            double eF_nplus1_trial[9] = {0.0};
-            MatMul3x3(leftMat, eF_n, eF_nplus1_trial);
-
-            float Uf[9] = {0.f};
-            float Vf[9] = {0.f};
-            float Etaf[9] = {0.f};
-            double Eta_star[9] = {0.0};
-            PolarSVD(float(eF_nplus1_trial[0]), float(eF_nplus1_trial[1]), float(eF_nplus1_trial[2]),
-                float(eF_nplus1_trial[3]), float(eF_nplus1_trial[4]), float(eF_nplus1_trial[5]),
-                float(eF_nplus1_trial[6]), float(eF_nplus1_trial[7]), float(eF_nplus1_trial[8]),
-                Uf[0], Uf[1], Uf[2], Uf[3], Uf[4], Uf[5], Uf[6], Uf[7], Uf[8],
-                Etaf[0], Etaf[4], Etaf[8],
-                Vf[0], Vf[1], Vf[2], Vf[3], Vf[4], Vf[5], Vf[6], Vf[7], Vf[8]);
-
-            double U[9] = {
-                    double(Uf[0]), double(Uf[1]), double(Uf[2]),
-                    double(Uf[3]), double(Uf[4]), double(Uf[5]),
-                    double(Uf[6]), double(Uf[7]), double(Uf[8]),
-            };
-
-            double V[9] = {
-                    double(Vf[0]), double(Vf[1]), double(Vf[2]),
-                    double(Vf[3]), double(Vf[4]), double(Vf[5]),
-                    double(Vf[6]), double(Vf[7]), double(Vf[8]),
-            };
-
-            //
-            Eta_star[0] = min(max(double(Etaf[0]), 1 - 8e-2), 1 + 2e-2);
-            Eta_star[4] = min(max(double(Etaf[4]), 1 - 8e-2), 1 + 2e-2);
-            Eta_star[8] = min(max(double(Etaf[8]), 1 - 8e-2), 1 + 2e-2);
-
-            double V_transpose[9] = {0.0};
-            MatTranspose(V, V_transpose);
-
-            double eF_nplus1[9] = {0.0};
-            double leftTmp[9] = {0.0};
-            MatMul3x3(U, Eta_star, leftTmp);
-            MatMul3x3(leftTmp, V_transpose, eF_nplus1);
-
-            double eF_nplus1_inv[9] = {0.0};
-            Mat3x3Inv(eF_nplus1, eF_nplus1_inv);
-            double mat_check[9] = {0.0};
-            MatMul3x3(eF_nplus1, eF_nplus1_inv, mat_check);
-            /*
-            if (i == 1){
-                printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                       mat_check[0], mat_check[1], mat_check[2],
-                       mat_check[3], mat_check[4], mat_check[5],
-                       mat_check[6], mat_check[7], mat_check[8]);
-            }
-            */
-
-            double pF_nplus1[9] = {0.0};
-            double leftTmp2[9] = {0.0};
-            MatMul3x3(eF_nplus1_inv, eF_nplus1_trial, leftTmp2);
-            MatMul3x3(leftTmp2, pF_n, pF_nplus1);
-
-            pEDGVec[9 * i] = eF_nplus1[0];
-            pEDGVec[9 * i + 1] = eF_nplus1[1];
-            pEDGVec[9 * i + 2] = eF_nplus1[2];
-            pEDGVec[9 * i + 3] = eF_nplus1[3];
-            pEDGVec[9 * i + 4] = eF_nplus1[4];
-            pEDGVec[9 * i + 5] = eF_nplus1[5];
-            pEDGVec[9 * i + 6] = eF_nplus1[6];
-            pEDGVec[9 * i + 7] = eF_nplus1[7];
-            pEDGVec[9 * i + 8] = eF_nplus1[8];
-
-            pPDGVec[9 * i] = pF_nplus1[0];
-            pPDGVec[9 * i + 1] = pF_nplus1[1];
-            pPDGVec[9 * i + 2] = pF_nplus1[2];
-            pPDGVec[9 * i + 3] = pF_nplus1[3];
-            pPDGVec[9 * i + 4] = pF_nplus1[4];
-            pPDGVec[9 * i + 5] = pF_nplus1[5];
-            pPDGVec[9 * i + 6] = pF_nplus1[6];
-            pPDGVec[9 * i + 7] = pF_nplus1[7];
-            pPDGVec[9 * i + 8] = pF_nplus1[8];
-
-            double dgDet = 0.0;
-            double pdgDet = Mat3x3Determinant(pF_nplus1);
-            assert(pdgDet > 0);
-            if (pdgDet > 1.0){
-                dgDet = max(dgDet, pdgDet);
-            }else{
-                dgDet = max(dgDet, 1.0 / pdgDet);
-            }
-            pDGDiffVec[i] = dgDet;
+        }else if (pType == WATER){
+            double pJn = pJVec[i];
+            pJVec[i] = (1.0 + dt * sum_vi_gradWip_dot) * pJn;
         }
+
 
         // Apply velocity
         pPosVec[3 * i] += dt * vel_p[0];
@@ -920,6 +953,7 @@ void MPMSimulator::step() {
                                                   mParticlesGroupsVec[i].pVelVecGRAM,
                                                   mParticlesGroupsVec[i].pElasiticityDeformationGradientGRAM,
                                                   mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM,
+                                                  mParticlesGroupsVec[i].pJVecGRAM,
                                                   mParticlesGroupsVec[i].pAffineVelGRAM,
                                                   mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
                                                   mGrid.nodeNumDim,
@@ -1076,6 +1110,7 @@ void MPMSimulator::step() {
                                                                  mParticlesGroupsVec[i].pVelVecGRAM,
                                                                  mParticlesGroupsVec[i].pElasiticityDeformationGradientGRAM,
                                                                  mParticlesGroupsVec[i].pPlasiticityDeformationGradientGRAM,
+                                                                 mParticlesGroupsVec[i].pJVecGRAM,
                                                                  mParticlesGroupsVec[i].pAffineVelGRAM,
                                                                  mParticlesGroupsVec[i].pDeformationGradientDiffGRAM,
                                                                  mGrid.originCorner[0],

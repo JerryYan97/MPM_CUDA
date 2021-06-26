@@ -176,7 +176,8 @@ int main() {
     MPMSimulator mSim(0.1f, 1.0/5000.0, 100, 8, mInfoVec);
     */
 
-    // Snow sphere collides wall
+    // Snow MPM words collides wall
+    /*
     ObjInitInfo mInfo;
     mInfo.objPath = obj4_path;
     mInfo.initVel = std::array<double, 3>({0.0, 0.0, 0.0});
@@ -188,7 +189,7 @@ int main() {
     mInfoVec.push_back(mInfo);
 
     MPMSimulator mSim(0.025f, 1.0/10000.0, 400, 10, mInfoVec);
-
+    */
 
     // Snow balls collides
     /*
@@ -242,9 +243,6 @@ int main() {
     mSim.setVel(initVel);
     */
 
-
-
-
     /*
     std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
     for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
@@ -252,6 +250,19 @@ int main() {
     }
     mSim.setVel(initVel);
     */
+
+    // Water cube dam break case:
+    ObjInitInfo mInfo;
+    mInfo.objPath = obj1_path;
+    mInfo.initVel = std::array<double, 3>({0.0, -0.0, 0.0});
+    mInfo.initRotationDegree = 0.f;
+    mInfo.initScale = glm::vec3(2.f);
+    mInfo.initTranslation = glm::vec3(5.0f, 4.f, 5.f);
+    mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
+    mInfo.mMaterial = Material(5e3, 0.3, 0.8, WATER);
+    mInfoVec.push_back(mInfo);
+
+    MPMSimulator mSim(0.1f, 1.0/5000.0, 100, 10, mInfoVec);
 
     // Init models
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
