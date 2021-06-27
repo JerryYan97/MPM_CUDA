@@ -312,7 +312,8 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     double* pEDGVec, double* pPDGVec, double* pJVec,
                     double* pAffineVelVec,
                     double gOriCorner_x, double gOriCorner_y, double gOriCorner_z, // int* gAttentionIdx,
-                    unsigned int gNodeNumDim, double h, double dt, double mu, double lambda,
+                    unsigned int gNodeNumDimX, unsigned int gNodeNumDimY, unsigned int gNodeNumDimZ,
+                    double h, double dt, double mu, double lambda,
                     double* gNodeMassVec, double* gNodeTmpMotVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < pNum){
@@ -422,17 +423,17 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                                        gOriCorner_z + idx_z * h};
                     // printf("b_pos:(%f, %f, %f)\n", b_pos[0], b_pos[1], b_pos[2]);
                     double w = BSplineInterpolation(pos, b_pos, h);
-                    int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
-                    if (idx_x >= gNodeNumDim || idx_y >= gNodeNumDim || idx_z >= gNodeNumDim){
+                    int g_idx = idx_z * gNodeNumDimX * gNodeNumDimY + idx_y * gNodeNumDimX + idx_x;
+                    if (idx_x >= gNodeNumDimX || idx_y >= gNodeNumDimY || idx_z >= gNodeNumDimZ){
                         printf("Particle ID:%d, idx_z:%d, idx_y:%d, idx_x:%d\n", i, idx_z, idx_y, idx_x);
                         assert(idx_x < gNodeNumDim);
                         assert(idx_y < gNodeNumDim);
                         assert(idx_z < gNodeNumDim);
                     }
-                    if (g_idx >= gNodeNumDim * gNodeNumDim * gNodeNumDim){
+                    if (g_idx >= gNodeNumDimX * gNodeNumDimY * gNodeNumDimZ){
                         printf("Particle ID:%d, idx_z:%d, idx_y:%d, idx_x:%d", i, idx_z, idx_y, idx_x);
                     }
-                    assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
+                    assert(g_idx < gNodeNumDimX * gNodeNumDimY * gNodeNumDimZ);
                     assert(g_idx >= 0);
 
                     atomicAdd(&gNodeMassVec[g_idx], w * m);
@@ -522,8 +523,8 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
                           double lower_x, double lower_y, double lower_z,
                           double upper_x, double upper_y, double upper_z,
                           double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
-                          unsigned int gNodeNumDim, double h,
-                          double* gMassVec, double* gVelMotVec){
+                          unsigned int gNodeNumDimX, unsigned int gNodeNumDimY, unsigned int gNodeNumDimZ,
+                          double h, double* gMassVec, double* gVelMotVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < gNum){
         double mass = gMassVec[i];
@@ -543,9 +544,9 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             gVelMotVec[3 * i + 1] = gVelMotVec[3 * i + 1] + ext_gravity * dt;
 
             // Deal with Boundary condition.
-            int idx_x = i % int(gNodeNumDim);
-            int idx_y = ((i - idx_x) / int(gNodeNumDim)) % int(gNodeNumDim);
-            int idx_z = ((i - idx_x) / int(gNodeNumDim) - idx_y) / int(gNodeNumDim);
+            int idx_x = i % int(gNodeNumDimX);
+            int idx_y = ((i - idx_x) / int(gNodeNumDimX)) % int(gNodeNumDimY);
+            int idx_z = ((i - idx_x) / int(gNodeNumDimX) - idx_y) / int(gNodeNumDimY);
             double grid_node_pos[3] = {gOriCorner_x + idx_x * h,
                                        gOriCorner_y + idx_y * h,
                                        gOriCorner_z + idx_z * h};
@@ -570,7 +571,8 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                                    double* pAffineVelVec,
                                    double* pDGDiffVec,
                                    double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
-                                   unsigned int gNodeNumDim, double h, double* gNodeVelVec){
+                                   unsigned int gNodeNumDimX, unsigned int gNodeNumDimY, unsigned int gNodeNumDimZ,
+                                   double h, double* gNodeVelVec){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < pNum){
         double h2_inv = 1.0 / (h * h);
@@ -600,8 +602,8 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                                        gOriCorner_z + idx_z * h};
 
                     double w = BSplineInterpolation(pos, b_pos, h);
-                    int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
-                    assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
+                    int g_idx = idx_z * gNodeNumDimX * gNodeNumDimY + idx_y * gNodeNumDimX + idx_x;
+                    assert(g_idx < gNodeNumDimZ * gNodeNumDimY * gNodeNumDimX);
                     assert(g_idx >= 0);
                     double gVel[3] = {gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]};
 
@@ -660,8 +662,8 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                         double b_pos[3] = {gOriCorner_x + idx_x * h,
                                            gOriCorner_y + idx_y * h,
                                            gOriCorner_z + idx_z * h};
-                        int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
-                        assert(g_idx < gNodeNumDim * gNodeNumDim * gNodeNumDim);
+                        int g_idx = idx_z * gNodeNumDimY * gNodeNumDimX + idx_y * gNodeNumDimX + idx_x;
+                        assert(g_idx < gNodeNumDimZ * gNodeNumDimY * gNodeNumDimX);
                         assert(g_idx >= 0);
 
                         double grad_wip[3] = {0.0};
@@ -820,9 +822,9 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
         pPosVec[3 * i + 2] += dt * vel_p[2];
 
         // Check whether particle is out of the boundary
-        double upperBound[3] = {gOriCorner_x + h * (gNodeNumDim - 1),
-                                gOriCorner_y + h * (gNodeNumDim - 1),
-                                gOriCorner_z + h * (gNodeNumDim - 1)};
+        double upperBound[3] = {gOriCorner_x + h * (gNodeNumDimX - 1),
+                                gOriCorner_y + h * (gNodeNumDimY - 1),
+                                gOriCorner_z + h * (gNodeNumDimZ - 1)};
         if (pPosVec[3 * i] < gOriCorner_x || pPosVec[3 * i] > upperBound[0] ||
             pPosVec[3 * i + 1] < gOriCorner_y || pPosVec[3 * i + 1] > upperBound[1] ||
             pPosVec[3 * i + 2] < gOriCorner_z || pPosVec[3 * i + 2] > upperBound[2]){
@@ -843,7 +845,8 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
 
 __global__ void FindAllRelatedParticles(unsigned int pNum, double* pPosVec,
                                         double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
-                                        double h, unsigned int gNodeNumDim,
+                                        double h,
+                                        unsigned int gNodeNumDimX, unsigned int gNodeNumDimY, unsigned int gNodeNumDimZ,
                                         int* gAttentionIdx,
                                         int* pAttentionParticleIdx){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -859,7 +862,7 @@ __global__ void FindAllRelatedParticles(unsigned int pNum, double* pPosVec,
                     int idx_x = b_idx_x + idx_x_offset;
                     int idx_y = b_idx_y + idx_y_offset;
                     int idx_z = b_idx_z + idx_z_offset;
-                    int g_idx = idx_z * gNodeNumDim * gNodeNumDim + idx_y * gNodeNumDim + idx_x;
+                    int g_idx = idx_z * gNodeNumDimX * gNodeNumDimY + idx_y * gNodeNumDimX + idx_x;
                     for (int j = 0; j < 27; ++j){
                         if (gAttentionIdx[j] == g_idx){
                             pAttentionParticleIdx[i] = 1.0;
@@ -956,7 +959,7 @@ void MPMSimulator::step() {
                                                   mParticlesGroupsVec[i].pJVecGRAM,
                                                   mParticlesGroupsVec[i].pAffineVelGRAM,
                                                   mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
-                                                  mGrid.nodeNumDim,
+                                                  mGrid.nodeNumDimX, mGrid.nodeNumDimY, mGrid.nodeNumDimZ,
                                                   mGrid.h, adp_dt, mParticlesGroupsVec[i].mMaterial.mMu, mParticlesGroupsVec[i].mMaterial.mLambda,
                                                   mGrid.nodeMassVec,
                                                   mGrid.nodeVelVec);
@@ -1059,18 +1062,19 @@ void MPMSimulator::step() {
 
     // 4. Calculate the velocity.
     // 5. Apply gravity.
-    int gNum = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim;
+    int gNum = mGrid.nodeNumDimX * mGrid.nodeNumDimY * mGrid.nodeNumDimZ;
     int gThreadsPerBlock = 256;
     int gBlocksPerGrid = (gNum + gThreadsPerBlock - 1) / gThreadsPerBlock;
     VelUpdate<<<gBlocksPerGrid, gThreadsPerBlock>>>(gNum, adp_dt, ext_gravity,
                                                     mGrid.originCorner[0] + 10 * mGrid.h,
                                                     mGrid.originCorner[1] + 10 * mGrid.h,
                                                     mGrid.originCorner[2] + 10 * mGrid.h,
-                                                    mGrid.originCorner[0] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
-                                                    mGrid.originCorner[1] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
-                                                    mGrid.originCorner[2] + mGrid.h * mGrid.nodeNumDim - 10 * mGrid.h,
+                                                    mGrid.originCorner[0] + mGrid.h * mGrid.nodeNumDimX - 10 * mGrid.h,
+                                                    mGrid.originCorner[1] + mGrid.h * mGrid.nodeNumDimY - 10 * mGrid.h,
+                                                    mGrid.originCorner[2] + mGrid.h * mGrid.nodeNumDimZ - 10 * mGrid.h,
                                                     mGrid.originCorner[0], mGrid.originCorner[1], mGrid.originCorner[2],
-                                                    mGrid.nodeNumDim, mGrid.h,
+                                                    mGrid.nodeNumDimX, mGrid.nodeNumDimY, mGrid.nodeNumDimZ,
+                                                    mGrid.h,
                                                     mGrid.nodeMassVec, mGrid.nodeVelVec);
     cudaDeviceSynchronize();
     err = cudaGetLastError();
@@ -1116,7 +1120,7 @@ void MPMSimulator::step() {
                                                                  mGrid.originCorner[0],
                                                                  mGrid.originCorner[1],
                                                                  mGrid.originCorner[2],
-                                                                 mGrid.nodeNumDim,
+                                                                 mGrid.nodeNumDimX, mGrid.nodeNumDimY, mGrid.nodeNumDimZ,
                                                                  mGrid.h,
                                                                  mGrid.nodeVelVec);
         cudaDeviceSynchronize();

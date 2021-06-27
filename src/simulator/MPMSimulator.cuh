@@ -53,7 +53,9 @@ struct ParticleGroup{
 
 struct Grid{
     double h;
-    unsigned int nodeNumDim; // The number of node for each dimension. We assume the grid is a cube.
+    unsigned int nodeNumDimX; // The number of node for each dimension. We assume the grid is a cube.
+    unsigned int nodeNumDimY;
+    unsigned int nodeNumDimZ;
     std::array<double, 3> originCorner;
     double* nodeMassVec;
     double* nodeVelVec;
@@ -75,7 +77,7 @@ private:
     double max_bound_y;
     double max_bound_z;
 
-    void initGrid(double gap, unsigned int nodeNumDim);
+    void initGrid(double gap, unsigned int nodeNumDimX, unsigned int nodeNumDimY, unsigned int nodeNumDimZ);
     void showMemUsage();
     void initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo);
 
@@ -89,7 +91,7 @@ public:
 
     MPMSimulator(double gap,
                  double dt,
-                 unsigned int nodeNumDim,
+                 unsigned int nodeNumDimX, unsigned int nodeNumDimY, unsigned int nodeNumDimZ,
                  unsigned int particleNumPerCell,
                  std::vector<ObjInitInfo>& objInitInfoVec);
 

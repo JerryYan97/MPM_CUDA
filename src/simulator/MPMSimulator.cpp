@@ -119,14 +119,16 @@ void MPMSimulator::initParticles(ParticleGroup& initPG, ObjInitInfo& initObjInfo
     }
 }
 
-void MPMSimulator::initGrid(double gap, unsigned int nodeNumDim) {
+void MPMSimulator::initGrid(double gap, unsigned int nodeNumDimX, unsigned int nodeNumDimY, unsigned int nodeNumDimZ) {
     // Init grid
     cudaError_t err = cudaSuccess;
     mGrid.h = gap;
-    mGrid.nodeNumDim = nodeNumDim;
+    mGrid.nodeNumDimX = nodeNumDimX;
+    mGrid.nodeNumDimY = nodeNumDimY;
+    mGrid.nodeNumDimZ = nodeNumDimZ;
     mGrid.originCorner = {0.0, 0.0, 0.0};
-    mGrid.massVecByteSize = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim * sizeof(double);
-    mGrid.velVecByteSize = mGrid.nodeNumDim * mGrid.nodeNumDim * mGrid.nodeNumDim * sizeof(double) * 3;
+    mGrid.massVecByteSize = mGrid.nodeNumDimX * mGrid.nodeNumDimY * mGrid.nodeNumDimZ * sizeof(double);
+    mGrid.velVecByteSize = mGrid.nodeNumDimX * mGrid.nodeNumDimY * mGrid.nodeNumDimZ * sizeof(double) * 3;
 
     std::cout << "Grid mass uses GRAM and RAM:" << float(mGrid.massVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
     std::cout << "Grid vel uses GRAM and RAM:" << float(mGrid.velVecByteSize) / (1024.f * 1024.f) << "MB" << std::endl;
@@ -173,7 +175,9 @@ void MPMSimulator::showMemUsage() {
     std::cout << "Sampled particle number:" << this->totalParticlesNum() << std::endl;
 }
 
-MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, unsigned int particleNumPerCell,
+MPMSimulator::MPMSimulator(double gap, double max_dt,
+                           unsigned int nodeNumDimX, unsigned int nodeNumDimY, unsigned int nodeNumDimZ,
+                           unsigned int particleNumPerCell,
                            std::vector<ObjInitInfo> &objInitInfoVec) {
 
     // Init overall simulator info.
@@ -182,7 +186,7 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
     ext_gravity = -9.8;
     current_frame = 0;
     current_time = 0.0;
-    initGrid(gap, nodeNumDim);
+    initGrid(gap, nodeNumDimX, nodeNumDimY, nodeNumDimZ);
     min_bound_x = 10000.0;
     min_bound_y = 10000.0;
     min_bound_z = 10000.0;
@@ -207,8 +211,12 @@ MPMSimulator::MPMSimulator(double gap, double max_dt, unsigned int nodeNumDim, u
             std::cerr << "ERROR: OBJ lower bound is smaller than grid's origin." << std::endl << cudaGetErrorString(err) << std::endl;
             exit(1);
         }
-        float gridUpperBound = (nodeNumDim - 1) * gap;
-        if (mModel.mUpperBound[0] > gridUpperBound || mModel.mUpperBound[1] > gridUpperBound || mModel.mUpperBound[2] > gridUpperBound){
+        float gridUpperBoundX = (nodeNumDimX - 1) * gap;
+        float gridUpperBoundY = (nodeNumDimY - 1) * gap;
+        float gridUpperBoundZ = (nodeNumDimZ - 1) * gap;
+        if (mModel.mUpperBound[0] > gridUpperBoundX ||
+            mModel.mUpperBound[1] > gridUpperBoundY ||
+            mModel.mUpperBound[2] > gridUpperBoundZ){
             std::cerr << "ERROR: OBJ upper bound is out of the grid." << std::endl << cudaGetErrorString(err) << std::endl;
             exit(1);
         }

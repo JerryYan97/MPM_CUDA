@@ -133,6 +133,7 @@ int main() {
     std::string obj2_path = std::string(PROJ_PATH) + "/models/cylinder.obj";
     std::string obj3_path = std::string(PROJ_PATH) + "/models/sphere.obj";
     std::string obj4_path = std::string(PROJ_PATH) + "/models/MPM2.obj";
+    std::string obj5_path = std::string(PROJ_PATH) + "/models/boat.obj";
 
     std::vector<ObjInitInfo> mInfoVec;
 
@@ -203,7 +204,6 @@ int main() {
     mInfo1.mMaterial = Material(5e3, 0.3, 400, SNOW);
     mInfoVec.push_back(mInfo1);
 
-
     ObjInitInfo mInfo2;
     mInfo2.objPath = obj3_path;
     mInfo2.initVel = std::array<double, 3>({20.0, 0.0, 0.0});
@@ -252,17 +252,43 @@ int main() {
     */
 
     // Water cube dam break case:
+    /*
     ObjInitInfo mInfo;
     mInfo.objPath = obj1_path;
     mInfo.initVel = std::array<double, 3>({0.0, -0.0, 0.0});
     mInfo.initRotationDegree = 0.f;
     mInfo.initScale = glm::vec3(2.f);
-    mInfo.initTranslation = glm::vec3(5.0f, 4.f, 5.f);
+    mInfo.initTranslation = glm::vec3(4.f, 4.f, 4.f);
     mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
     mInfo.mMaterial = Material(5e3, 0.3, 0.8, WATER);
     mInfoVec.push_back(mInfo);
 
-    MPMSimulator mSim(0.1f, 1.0/5000.0, 100, 10, mInfoVec);
+    MPMSimulator mSim(0.1f, 1.0/5000.0, 80, 200, 140, 10, mInfoVec);
+    */
+
+    // Water cube dam break with boat case:
+    ObjInitInfo mInfo1;
+    mInfo1.objPath = obj1_path;
+    mInfo1.initVel = std::array<double, 3>({0.0, 0.0, 0.0});
+    mInfo1.initRotationDegree = 0.f;
+    mInfo1.initScale = glm::vec3(2.f, 3.f, 2.f);
+    mInfo1.initTranslation = glm::vec3(6.f, 5.f, 4.f);
+    mInfo1.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
+    mInfo1.mMaterial = Material(5e3, 0.3, 1.1, WATER);
+    mInfoVec.push_back(mInfo1);
+
+
+    ObjInitInfo mInfo2;
+    mInfo2.objPath = obj5_path;
+    mInfo2.initVel = std::array<double, 3>({0.0, 0.0, 0.0});
+    mInfo2.initRotationDegree = 90.f;
+    mInfo2.initScale = glm::vec3 (1.f);
+    mInfo2.initTranslation = glm::vec3(6.f, 5.f, 10.f);
+    mInfo2.initRotationAxis = glm::normalize(glm::vec3(0.f, 1.f, 0.f));
+    mInfo2.mMaterial = Material(1e4, 0.4, 0.8, JELLO);
+    mInfoVec.push_back(mInfo2);
+
+    MPMSimulator mSim(0.04f, 1.0/5000.0, 300, 500, 500, 10, mInfoVec);
 
     // Init models
     std::string instance_obj_path = std::string(PROJ_PATH) + "/models/sphereLowRes2.obj";
@@ -271,9 +297,9 @@ int main() {
     InstanceModel mModel(instance_obj_path, insPos, 0.01f);
 
     float upperCorner[3] = {
-            static_cast<float>(mSim.mGrid.originCorner[0] + mSim.mGrid.h * mSim.mGrid.nodeNumDim),
-            static_cast<float>(mSim.mGrid.originCorner[1] + mSim.mGrid.h * mSim.mGrid.nodeNumDim),
-            static_cast<float>(mSim.mGrid.originCorner[2] + mSim.mGrid.h * mSim.mGrid.nodeNumDim)
+            static_cast<float>(mSim.mGrid.originCorner[0] + mSim.mGrid.h * mSim.mGrid.nodeNumDimX),
+            static_cast<float>(mSim.mGrid.originCorner[1] + mSim.mGrid.h * mSim.mGrid.nodeNumDimY),
+            static_cast<float>(mSim.mGrid.originCorner[2] + mSim.mGrid.h * mSim.mGrid.nodeNumDimZ)
     };
     model mBoundaryModel(reinterpret_cast<const float *>(mSim.mGrid.originCorner.data()), upperCorner);
     mBoundaryModel.transLinesGRAM();
