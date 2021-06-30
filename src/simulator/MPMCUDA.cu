@@ -346,63 +346,12 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
             float snow_mu = float(mu) * harding_coef;
             float snow_lambda = float(lambda) * harding_coef;
 
-            /*
-            FixedCorotatedPStress(tmpEDG[0], tmpEDG[1], tmpEDG[2],
-                                  tmpEDG[3], tmpEDG[4], tmpEDG[5],
-                                  tmpEDG[6], tmpEDG[7], tmpEDG[8],
-                                  snow_mu, snow_lambda,
-                                  stress[0], stress[1], stress[2],
-                                  stress[3], stress[4], stress[5],
-                                  stress[6], stress[7], stress[8]);
-            */
-
             kirchoff_FCR(tmpEDG, snow_mu, snow_lambda, tau);
 
-            /*
-            if (i == 1){
-                printf("Particle 1 Jp:%f, Je:%f, hard coef:%f \n, stress:\n[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n\n",
-                       Jp, Je, harding_coef,
-                       stress[0], stress[1], stress[2],
-                       stress[3], stress[4], stress[5],
-                       stress[6], stress[7], stress[8]);
-            }
-
-            if (harding_coef < 1.f){
-                printf("Particle %d's hard coef:%f\n", i, harding_coef);
-            }
-            */
         } else if (pType == WATER){
             waterJ = pJVec[i];
             waterPressure = 2.51 * (1.0 / pow(waterJ, 7.0) - 1.0);
         }
-
-
-        /*
-        if (i == 1){
-            printf("P2G: Tmp Mat of particle 1:\n");
-            printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                   tmpMat[0], tmpMat[1], tmpMat[2],
-                   tmpMat[3], tmpMat[4], tmpMat[5],
-                   tmpMat[6], tmpMat[7], tmpMat[8]);
-            printf("P2G: Stress of particle 1:\n");
-            printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                   stress[0], stress[1], stress[2],
-                   stress[3], stress[4], stress[5],
-                   stress[6], stress[7], stress[8]);
-            printf("P2G: Stress2 of particle 1:\n");
-            printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                   stress2[0], stress2[1], stress2[2],
-                   stress2[3], stress2[4], stress2[5],
-                   stress2[6], stress2[7], stress2[8]);
-            printf("P2G: F1:\n");
-            printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                   tmpDeformationGradient[0], tmpDeformationGradient[1], tmpDeformationGradient[2],
-                   tmpDeformationGradient[3], tmpDeformationGradient[4], tmpDeformationGradient[5],
-                   tmpDeformationGradient[6], tmpDeformationGradient[7], tmpDeformationGradient[8]);
-            printf("P2G: F1 determinant:%f\n", Mat3x3Determinant(tmpDeformationGradient));
-            printf("mu:%f, lambda:%f\n", mu, lambda);
-        }
-        */
 
         int b_idx_x = max(0, int((pos[0] - gOriCorner_x - 0.5 * h) / h));
         int b_idx_y = max(0, int((pos[1] - gOriCorner_y - 0.5 * h) / h));
@@ -452,14 +401,6 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], w * m * right_term[2]);
                     t_w += w;
 
-                    /*
-                    if (i == 1){
-                        // printf("P109743 related node Mot(g_idx=%d)=[%f, %f, %f] w=%f.\n", g_idx,
-                        //        w * m * vel[0], w * m * vel[1], w * m * vel[2], w);
-                        gAttentionIdx[idx_x_offset * 9 + idx_y_offset * 3 + idx_z_offset] = g_idx;
-                    }
-                    */
-
                     // Transfer elasticity force to grid.
                     double grad_wip[3] = {0.0};
                     BSplineInterpolationGradient(pos, b_pos, h, grad_wip[0], grad_wip[1], grad_wip[2]);
@@ -478,44 +419,16 @@ __global__ void P2G(unsigned int pNum, double pMass, double pVol, int pType,
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx], dt * tmpForce[0]);
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx + 1], dt * tmpForce[1]);
                     atomicAdd(&gNodeTmpMotVec[3 * g_idx + 2], dt * tmpForce[2]);
-                    /*
-                    if (i == 1){
-                        printf("Particle %d contributes force to g_idx = %d:[%f, %f, %f]\n", i, g_idx, -tmpForce[0], -tmpForce[1], -tmpForce[2]);
-                        printf("Particle %d contributes grad_wip = %d:[%f, %f, %f]\n", i, g_idx, grad_wip_f[0], grad_wip_f[1], grad_wip_f[2]);
-                        // pAttentionLabel[i] = 1;
-                    }
-                    */
 
                     t_f_x -= tmpForce[0];
                     t_f_y -= tmpForce[1];
                     t_f_z -= tmpForce[2];
 
-                    /*
-                    if (i == 0){
-                        printf("grad_wip_f:(%f, %f, %f)\n", grad_wip_f[0], grad_wip_f[1], grad_wip_f[2]);
-                        printf("tmpForce:(%f, %f, %f)\n", tmpForce[0], tmpForce[1], tmpForce[2]);
-                        printf("total force:(%f, %f, %f)\n", t_f_x, t_f_y, t_f_z);
-                    }
-                    */
                 }
             }
         }
-        // pForceVec[3 * i] = double(t_f_x);
-        // pForceVec[3 * i + 1] = double(t_f_y);
-        // pForceVec[3 * i + 2] = double(t_f_z);
-        /*
-        if (abs(t_f_x) > 1.0 || abs(t_f_y) > 1.0 || abs(t_f_z) > 1.0){
-            printf("Particle %d contributes force:[%f, %f, %f]\n", i, t_f_x, t_f_y, t_f_z);
-            // pAttentionLabel[i] = 1;
-        }
-
-        if (i == 1){
-            printf("P1 Elasticity Force Contribution:(%f, %f, %f)\n", t_f_x, t_f_y, t_f_z);
-        }
-        */
 
         assert(abs(t_w - 1.0) < 0.001);
-        // assert(abs(t_m - 1.0) < 0.001);
     }
 }
 
@@ -550,14 +463,7 @@ __global__ void VelUpdate(unsigned int gNum, double dt, double ext_gravity,
             double grid_node_pos[3] = {gOriCorner_x + idx_x * h,
                                        gOriCorner_y + idx_y * h,
                                        gOriCorner_z + idx_z * h};
-            /*
-            if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x || grid_node_pos[1] <= lower_y ||
-                grid_node_pos[1] >= upper_y || grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z){
-                gVelMotVec[3 * i] = 0.0;
-                gVelMotVec[3 * i + 1] = 0.0;
-                gVelMotVec[3 * i + 2] = 0.0;
-            }
-            */
+
             if (grid_node_pos[0] <= lower_x || grid_node_pos[0] >= upper_x) gVelMotVec[3 * i] = 0.0;
             if (grid_node_pos[1] <= lower_y || grid_node_pos[1] >= upper_y) gVelMotVec[3 * i + 1] = 0.0;
             if (grid_node_pos[2] <= lower_z || grid_node_pos[2] >= upper_z) gVelMotVec[3 * i + 2] = 0.0;
@@ -633,7 +539,6 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                     t_vel_x += gVel[0];
                     t_vel_y += gVel[1];
                     t_vel_z += gVel[2];
-                    // printf("gNode vel:[%f, %f, %f]\n", gNodeVelVec[3 * g_idx], gNodeVelVec[3 * g_idx + 1], gNodeVelVec[3 * g_idx + 2]);
                     t_w += w;
                 }
             }
@@ -766,14 +671,6 @@ __global__ void InterpolateAndMove(unsigned int pNum, double dt, int pType,
                 Mat3x3Inv(eF_nplus1, eF_nplus1_inv);
                 double mat_check[9] = {0.0};
                 MatMul3x3(eF_nplus1, eF_nplus1_inv, mat_check);
-                /*
-                if (i == 1){
-                    printf("[%f, %f, %f]\n[%f, %f, %f]\n[%f, %f, %f]\n",
-                           mat_check[0], mat_check[1], mat_check[2],
-                           mat_check[3], mat_check[4], mat_check[5],
-                           mat_check[6], mat_check[7], mat_check[8]);
-                }
-                */
 
                 double pF_nplus1[9] = {0.0};
                 double leftTmp2[9] = {0.0};
@@ -893,13 +790,6 @@ __global__ void FindOutBoundParticles(unsigned int pNum, double* pPosVec,
     }
 }
 
-/* This can be done freely during P2G:
-void FindRelatedGrid(int tarIdx, double gOriCorner_x, double gOriCorner_y, double gOriCorner_z,
-                     double h, std::vector<int>& gAttentionIdx){
-
-}
-*/
-
 void MPMSimulator::step() {
 
     // 0. Check each particles is affected by 9 grid nodes and within the grid.
@@ -916,32 +806,6 @@ void MPMSimulator::step() {
         std::cerr << "Clean grid velocity error." << std::endl << cudaGetErrorString(err) << std::endl;
         exit(1);
     }
-/*
-#ifdef DEBUG
-    std::cout << "********* Frame " << current_frame << " starts **********" << std::endl << std::endl;
-    double standard_speed = ext_gravity * t;
-    // Check particle 1 pos and vel:
-    std::cout << "n vel:[" << mParticles.particleVelVec[1 * 3] << " " << mParticles.particleVelVec[1 * 3 + 1] << " " << mParticles.particleVelVec[1 * 3 + 2] << "]" << std::endl;
-    std::cout << "n pos:[" << mParticles.particlePosVec[1 * 3] << " " << mParticles.particlePosVec[1 * 3 + 1] << " " << mParticles.particlePosVec[1 * 3 + 2] << "]" << std::endl << std::endl;
-
-#endif
-*/
-
-/*
-    double* pForceVec;
-    err = cudaMalloc(&pForceVec, mParticles.particleNum * sizeof(double) * 3);
-    if (err != cudaSuccess){
-        std::cerr << "Allocate particle force vector error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    int* gAttentionIdx;
-    err = cudaMalloc(&gAttentionIdx, 27 * sizeof(int));
-    if (err != cudaSuccess){
-        std::cerr << "Allocate attention idx error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-*/
 
     // 2. Transfer mass to the grid.
     // 3. Transfer velocity(Momentum) to the grid.
@@ -972,94 +836,6 @@ void MPMSimulator::step() {
         }
     }
 
-
-/*
-#ifdef DEBUG
-    double pos0_y_init = mParticles.particlePosVec[1];
-    double vel0_y_init = mParticles.particleVelVec[1];
-    double vel_energy_init = 0.5 * 1.0 * vel0_y_init * vel0_y_init;
-
-    // Check whether grid mass is equal to particles mass.
-    double* h_gMassVec = (double*)malloc(mGrid.massVecByteSize);
-    err = cudaMemcpy(h_gMassVec, mGrid.nodeMassVec, mGrid.massVecByteSize, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy grid mass memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    thrust::device_vector<double> gMass(h_gMassVec, h_gMassVec + mGrid.massVecByteSize / sizeof(double));
-    thrust::device_vector<double> pMass(mParticles.particleMassVec.begin(), mParticles.particleMassVec.end());
-
-    double gSum = thrust::reduce(gMass.begin(), gMass.end());
-    double pSum = thrust::reduce(pMass.begin(), pMass.end());
-    if (abs(gSum - pSum) > 0.0001){
-        std::cerr << "Mass is different between Grid and particles after P2G." << std::endl;
-        std::cerr << "gSum:" << gSum << " pSum:" << pSum << std::endl;
-        exit(1);
-    }
-    free(h_gMassVec);
-
-    // Check force on the grid.
-    double* h_gForceVec = (double*)malloc(mGrid.forceVecByteSize);
-    err = cudaMemcpy(h_gForceVec, mGrid.nodeForceVec, mGrid.forceVecByteSize, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy grid force memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    int* h_gAttentionIdx = (int*)malloc(sizeof(int) * 27);
-    err = cudaMemcpy(h_gAttentionIdx, gAttentionIdx, sizeof(int) * 27, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy attentionIdx memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-
-    for (int i = 0; i < 27; ++i){
-        int g_idx = h_gAttentionIdx[i];
-        std::cout << "f(g_idx=" << g_idx << ")" << "=[" << h_gForceVec[g_idx * 3] << ", " << h_gForceVec[g_idx * 3 + 1] << ", " << h_gForceVec[g_idx * 3 + 2] << "]" << std::endl;
-    }
-
-    int* d_pAttentionLabel;
-    err = cudaMalloc(&d_pAttentionLabel, mParticles.particleNum * sizeof(int));
-    if (err != cudaSuccess){
-        std::cerr << "Allocate pAttentionLabel memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-    err = cudaMemset(d_pAttentionLabel, 0, mParticles.particleNum * sizeof(int));
-    if (err != cudaSuccess){
-        std::cerr << "Clean AttentionLabel error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-*/
-    /*
-    FindAllRelatedParticles<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
-                                                                  mParticles.pPosVecGRAM,
-                                                                  mGrid.originCorner[0],
-                                                                  mGrid.originCorner[1],
-                                                                  mGrid.originCorner[2],
-                                                                  mGrid.h,
-                                                                  mGrid.nodeNumDim,
-                                                                  gAttentionIdx,
-                                                                  pAttentionLabel);
-    */
-/*
-    double* h_pForce = (double*)malloc(sizeof(double) * mParticles.particleNum * 3);
-    err = cudaMemcpy(h_pForce, pForceVec, sizeof(double) * mParticles.particleNum * 3, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy pForceVec memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }
-*/
-    /* Attention Nodes:
-    for (int i = 0; i < mParticles.particleNum; ++i){
-        if (h_pAttentionLabel[i] == 1){
-            std::cout << "Related nodes are affected by particle_idx = " << i << std::endl;
-            std::cout << "f(p_idx = " << i << ") = " << "[" << h_pForce[i * 3] << ", " << h_pForce[i * 3 + 1] << ", " << h_pForce[i * 3 + 2] << "]" << std::endl;
-            h_pAttentionIdx.push_back(i);
-        }
-    }
-    */
-// #endif
-
     // 4. Calculate the velocity.
     // 5. Apply gravity.
     int gNum = mGrid.nodeNumDimX * mGrid.nodeNumDimY * mGrid.nodeNumDimZ;
@@ -1082,10 +858,6 @@ void MPMSimulator::step() {
         fprintf(stderr, "Failed to launch VelUpdate kernel (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-
-#ifdef DEBUG
-
-#endif
 
     // 5.5 Clean the velocity and affine velocity on the particles.
     // 6. Interpolate new velocity back to particles.
@@ -1147,66 +919,7 @@ void MPMSimulator::step() {
         tmp_factor = std::max(*max_diff * *max_diff * *max_diff, tmp_factor);
         factor = std::min(10.0, tmp_factor);
     }
-    // adp_dt = max_dt / factor;
 
-    // auto min_diff = thrust::min_element(dev_ptr_start, dev_ptr_end);
-    // std::cout << "Max determinant:" << *max_diff << std::endl; //<< " Min determinant:" << *min_diff << std::endl;
-
-
-#ifdef DEBUG
-    // Check whether the energy is consistent.
-    // std::cout << "n+1 vel:[" << mParticles.particleVelVec[1 * 3] << " " << mParticles.particleVelVec[1 * 3 + 1] << " " << mParticles.particleVelVec[1 * 3 + 2] << "]" << std::endl;
-    // std::cout << "n+1 pos:[" << mParticles.particlePosVec[1 * 3] << " " << mParticles.particlePosVec[1 * 3 + 1] << " " << mParticles.particlePosVec[1 * 3 + 2] << "]" << std::endl << std::endl;
-/*
-    double vel_energy_cur = 0.5 * 1.0 * (mParticles.particleVelVec[1] * mParticles.particleVelVec[1]);
-    double vel_energy_diff = vel_energy_cur - vel_energy_init;
-    double pos0_y_cur = mParticles.particlePosVec[1];
-    double gravity_energy = -1.0 * 9.8 * (pos0_y_cur - pos0_y_init);
-    std::cout << "vel energy difference:" << vel_energy_diff << " gravity energy difference:" << gravity_energy << std::endl;
-*/
-    // Check the first particle with velocity problem:
-    /*
-    for (int i = 0; i < mParticles.particleNum; ++i){
-        double vel_x = mParticles.particleVelVec[i * 3];
-        double vel_y = mParticles.particleVelVec[i * 3 + 1];
-        double vel_z = mParticles.particleVelVec[i * 3 + 2];
-        if (abs(vel_x) > 0.001 || abs(vel_z) > 0.001){
-            std::cout << "Problem particle id:" << i << std::endl; // 54870
-            std::cout << "Problem velocity:[" << vel_x << ", " << vel_y << ", " << vel_z << "]" << std::endl;
-        }
-    }
-    */
-
-    /*
-    FindOutBoundParticles<<<pBlocksPerGrid, pThreadsPerBlock>>>(mParticles.particleNum,
-                                                                mParticles.pPosVecGRAM,
-                                                                min_bound_x, min_bound_y, min_bound_z,
-                                                                max_bound_x, max_bound_y, max_bound_z,
-                                                                d_pAttentionLabel);
-    int* h_pAttentionLabel = (int*)malloc(sizeof(int) * mParticles.particleNum);
-    std::vector<int> h_pAttentionIdx;
-    err = cudaMemcpy(h_pAttentionLabel, d_pAttentionLabel, sizeof(int) * mParticles.particleNum, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess){
-        std::cerr << "Copy pAttentionLabel memory error." << std::endl << cudaGetErrorString(err) << std::endl;
-        exit(1);
-    }*/
-
-    /* Out of bound Particles -- 109743
-    for (int i = 0; i < mParticles.particleNum; ++i){
-        if (h_pAttentionLabel[i] == 1){
-            std::cout << "Out of bound particle_idx = " << i << std::endl;
-            std::cout << "f(p_idx = " << i << ") = " << "[" << h_pForce[i * 3] << ", " << h_pForce[i * 3 + 1] << ", " << h_pForce[i * 3 + 2] << "]" << std::endl;
-            std::cout << "v(n+1)(p_idx = " << i << ") = [" << mParticles.particleVelVec[i * 3] << " " << mParticles.particleVelVec[i * 3 + 1] << " " << mParticles.particleVelVec[i * 3 + 2] << "]" << std::endl;
-            h_pAttentionIdx.push_back(i);
-        }
-    }
-    */
-
-    std::cout << "***********************************" << std::endl << std::endl;
-#endif
-
-    // cudaFree(pForceVec);
-    // cudaFree(gAttentionIdx);
     ++current_frame;
     current_time += adp_dt;
 }

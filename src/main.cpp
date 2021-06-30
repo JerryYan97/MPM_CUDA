@@ -136,136 +136,6 @@ int main() {
     std::string obj5_path = std::string(PROJ_PATH) + "/models/boat.obj";
 
     std::vector<ObjInitInfo> mInfoVec;
-
-    // model mModel(obj_path);
-    // MPMSimulator mSim(0.1f, 1.0/10000.0, 200, 10, obj1_path, obj2_path);
-
-    // Jello Cube Cylinder case:
-    /*
-    ObjInitInfo mInfo1;
-    mInfo1.objPath = obj1_path;
-    mInfo1.initVel = std::array<double, 3>({0.0, -6.0, 0.0});
-    mInfo1.initRotationDegree = 35.f;
-    mInfo1.initScale = glm::vec3(1.f);
-    mInfo1.initTranslation = glm::vec3(5.f, 5.f, 5.f);
-    mInfo1.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo1.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
-    mInfoVec.push_back(mInfo1);
-
-    ObjInitInfo mInfo2;
-    mInfo2.objPath = obj2_path;
-    mInfo2.initVel = std::array<double, 3>({0.0, -1.0, 0.0});
-    mInfo2.initRotationDegree = 0.f;
-    mInfo2.initScale = glm::vec3(1.f, 2.f, 1.f);
-    mInfo2.initTranslation = glm::vec3(5.f, 2.f, 5.f);
-    mInfo2.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo2.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
-    mInfoVec.push_back(mInfo2);
-    */
-
-    // Jello cube collides boundary wall
-    /*
-    ObjInitInfo mInfo;
-    mInfo.objPath = obj1_path;
-    mInfo.initVel = std::array<double, 3>({0.0, -8.0, 0.0});
-    mInfo.initRotationDegree = 35.f;
-    mInfo.initScale = glm::vec3(1.f);
-    mInfo.initTranslation = glm::vec3(5.f, 4.f, 5.f);
-    mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo.mMaterial = Material(1e4, 0.4, 1.1, JELLO);
-    mInfoVec.push_back(mInfo);
-    MPMSimulator mSim(0.1f, 1.0/5000.0, 100, 8, mInfoVec);
-    */
-
-    // Snow MPM words collides wall
-    /*
-    ObjInitInfo mInfo;
-    mInfo.objPath = obj4_path;
-    mInfo.initVel = std::array<double, 3>({0.0, 0.0, 0.0});
-    mInfo.initRotationDegree = 0.f;
-    mInfo.initScale = glm::vec3(1.f);
-    mInfo.initTranslation = glm::vec3(5.0f, 1.5f, 5.f);
-    mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo.mMaterial = Material(5e3, 0.3, 0.8, SNOW);
-    mInfoVec.push_back(mInfo);
-
-    MPMSimulator mSim(0.025f, 1.0/10000.0, 400, 10, mInfoVec);
-    */
-
-    // Snow balls collides
-    /*
-    ObjInitInfo mInfo1;
-    mInfo1.objPath = obj3_path;
-    mInfo1.initVel = std::array<double, 3>({-5.0, 0.0, 0.0});
-    mInfo1.initRotationDegree = 0.f;
-    mInfo1.initScale = glm::vec3(1.f);
-    mInfo1.initTranslation = glm::vec3(7.f, 4.f, 5.f);
-    mInfo1.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo1.mMaterial = Material(5e3, 0.3, 400, SNOW);
-    mInfoVec.push_back(mInfo1);
-
-    ObjInitInfo mInfo2;
-    mInfo2.objPath = obj3_path;
-    mInfo2.initVel = std::array<double, 3>({20.0, 0.0, 0.0});
-    mInfo2.initRotationDegree = 0.f;
-    mInfo2.initScale = glm::vec3(0.5f);
-    mInfo2.initTranslation = glm::vec3(3.f, 4.f, 5.f);
-    mInfo2.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo2.mMaterial = Material(5e3, 0.3, 400, SNOW);
-    mInfoVec.push_back(mInfo2);
-
-    MPMSimulator mSim(0.05f, 1.0/500.0, 200, 10, mInfoVec);
-    */
-
-    // Jello cube collides case:
-    /*
-    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
-    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
-        if (i < mSim.mParticles.particleNum / 2){
-            initVel[3 * i] = -8.0;
-        }else{
-            initVel[3 * i] = 8.0;
-        }
-    }
-    mSim.setVel(initVel);
-    */
-
-    // Jello cube collides cylinder case:
-    /*
-    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
-    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
-        if (i < mSim.mParticles.particleNumDiv[0]){
-            initVel[3 * i + 1] = -6.0;
-        }else{
-            initVel[3 * i + 1] = -1.0;
-        }
-    }
-    mSim.setVel(initVel);
-    */
-
-    /*
-    std::vector<double> initVel(mSim.mParticles.particleNum * 3, 0.0);
-    for (int i = 0; i < mSim.mParticles.particleNum; ++i) {
-        initVel[3 * i + 1] = -0.5;
-    }
-    mSim.setVel(initVel);
-    */
-
-    // Water cube dam break case:
-    /*
-    ObjInitInfo mInfo;
-    mInfo.objPath = obj1_path;
-    mInfo.initVel = std::array<double, 3>({0.0, -0.0, 0.0});
-    mInfo.initRotationDegree = 0.f;
-    mInfo.initScale = glm::vec3(2.f);
-    mInfo.initTranslation = glm::vec3(4.f, 4.f, 4.f);
-    mInfo.initRotationAxis = glm::normalize(glm::vec3(1.f, 0.f, 0.f));
-    mInfo.mMaterial = Material(5e3, 0.3, 0.8, WATER);
-    mInfoVec.push_back(mInfo);
-
-    MPMSimulator mSim(0.1f, 1.0/5000.0, 80, 200, 140, 10, mInfoVec);
-    */
-
     // Water cube dam break with boat case:
     ObjInitInfo mInfo1;
     mInfo1.objPath = obj1_path;
@@ -331,14 +201,11 @@ int main() {
     float counter = 0.0;
     while (!glfwWindowShouldClose(window) && mSim.current_time <= 20.0){
         glfwPollEvents();
-        // processMovementInput(window);
         process = true;
         if (process){
             mSim.step();
-            // process = false;
         }
 
-        // std::vector<float> tmpParticlePos(mSim.mParticles.particlePosVec.begin(), mSim.mParticles.particlePosVec.end());
         std::vector<float> tmpParticlePos;
         mSim.getGLParticlesPos(tmpParticlePos);
 
